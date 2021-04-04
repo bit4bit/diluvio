@@ -26,6 +26,7 @@ class FreeswitchConnectionFake implements FreeswitchConnectioner {
     }
 
     async hangup(reason: string) {
+        this.actions.push('hangup')
         for(const cb of this.hangups_cb) {
             cb(new Map())
         }
@@ -36,9 +37,10 @@ class FreeswitchConnectionFake implements FreeswitchConnectioner {
     }
 }
 
-class DialplanFetchFake implements DialplanFetcher {
+class DialplanFetchEchoFake implements DialplanFetcher {
     fetch(url: string) {
         return [
+            //configuracion del canal
             {action: 'parameter', data: {name: 'on_hangup', publish: 'http://localhost'}},
             {action: 'answer'},
             {action: 'echo'},
@@ -47,22 +49,59 @@ class DialplanFetchFake implements DialplanFetcher {
     }
 }
 
+class DialplanFetchDialFake implements DialplanFetcher {
+    fetchs: Array<string> = []
+    
+    fetch(url: string) {
+        this.fetchs.push(url)
+
+        switch(url) {
+            case '/':
+                return [
+                    {action: 'dial', data: 'http://localhost/after-dial'}
+                ]
+                break
+            case 'http://localhost/after-dial':
+                return [
+                    {action: 'hangup'}
+                ]
+                break
+        }
+
+        return []
+    }
+}
+
 class PublishFake implements Publisher {
     public actions: Array<string> = []
         
-    async response(destination: string, event: FreeswitchEvent) {
+    async event(destination: string, event: FreeswitchEvent) {
         this.actions.push(`to: ${destination}`)
     }
 }
 
 Deno.test('iteration 1 outbound', async () => {
     const fsconn = new FreeswitchConnectionFake()
-    const dialplanFetch = new DialplanFetchFake()
+    const dialplanFetch = new DialplanFetchEchoFake()
     const publish = new PublishFake()
     
     const diluvio = new Diluvio(dialplanFetch, publish)
     await diluvio.connect(fsconn).process()
 
-    assertEquals(fsconn.actions, ['answer', 'execute: echo'])
+    assertEquals(fsconn.actions, ['answer', 'execute: echo', 'hangup'])
     assertEquals(publish.actions, ['to: http://localhost'])
 })
+
+
+Deno.test('iteration 2 outbound sub dialplan', async () => {
+    const fsconn = new FreeswitchConnectionFake()
+    const dialplanFetch = new DialplanFetchDialFake()
+    const publish = new PublishFake()
+    
+    const diluvio = new Diluvio(dialplanFetch, publish)
+    await diluvio.connect(fsconn).process()
+
+    assertEquals(fsconn.actions, ['execute: dial', 'hangup'])
+    assertEquals(dialplanFetch.fetchs, ['/', 'http://localhost/after-dial'])
+})
+
