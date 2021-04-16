@@ -9,10 +9,18 @@ export interface FreeswitchConnectioner {
 
     hangup(reason: string): Promise<void>
     on_hangup(cb: FreeswitchEventCallback): void
+
 }
 
-type DialplanActionerParameter = {name: string, publish: string}
-export type DialplanActioner = {action: string, data?: DialplanActionerParameter | string} 
+// @bit4bit 2021-04-15, typescript permite
+// obtener el type en tiempo de ejecucion
+export type DialplanActionerParameter = {
+    parameter: string
+    value: string
+}
+
+export type DialplanActionerAction = {action: string, data?: string}
+export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter
 
 export interface DialplanFetcher {
     fetch(url: string): Array<DialplanActioner> | []
@@ -52,39 +60,44 @@ class DiluvioConnection {
     }
 
     private async run_dialplan(dialplan: Array<DialplanActioner>): Promise<void> {
-        for(const plan of dialplan) {
-            switch(plan.action) {
-                case 'answer':
-                    await this.fsconn.answer()
-                    break
-                case 'echo':
-                    await this.fsconn.execute('echo', '')
-                    break
-                case 'dial':
-                    // refactor
-                    await this.fsconn.execute('dial', '')
-                    const destination = plan.data as string ?? ''
-                    if (destination != '') {
-                        const new_dialplan = this.dialplan.fetch(destination)
-                        return await this.run_dialplan(new_dialplan)
-                    }
-                    break
-                case 'hangup':
-                    await this.fsconn.hangup(plan.data as string ?? 'NORMAL_CLEARING')
-                    return
-                case 'parameter':
-                    if (!plan.data) {
-                        console.info(`omiting parameter ${JSON.stringify(plan)}`)
-                        continue
-                    }
-                    const param = plan.data as DialplanActionerParameter
-                    switch(param.name) {
-                        case 'on_hangup':
-                            this.hangup_destination = param.publish
-                            break
-                        default:
-                            throw new Error(`parameter unkown handler ${param.name}`)
-                    }
+        for(const item of dialplan) {
+            // https://www.typescriptlang.org/docs/handbook/advanced-types.html
+            if("action" in item) {
+                const plan = item as DialplanActionerAction
+                
+                switch(plan.action) {
+                    case 'answer':
+                        await this.fsconn.answer()
+                        break
+                    case 'echo':
+                        await this.fsconn.execute('echo', '')
+                        break
+                    case 'dial':
+                        // refactor
+                        await this.fsconn.execute('dial', '')
+                        const destination = plan.data as string ?? ''
+                        if (destination != '') {
+                            const new_dialplan = this.dialplan.fetch(destination)
+                            return await this.run_dialplan(new_dialplan)
+                        }
+                        break
+                    case 'hangup':
+                        await this.fsconn.hangup(plan.data as string ?? 'NORMAL_CLEARING')
+                        return
+                    case 'parameter':
+
+                }
+            }
+            else if ("parameter" in item) {
+                const param = item as DialplanActionerParameter
+                
+                switch(param.parameter) {
+                    case 'on_hangup':
+                        this.hangup_destination = param.value
+                        break
+                    default:
+                        throw new Error(`parameter unkown handler ${param.parameter}`)
+                }
             }
         }
     }

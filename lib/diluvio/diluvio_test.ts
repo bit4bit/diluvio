@@ -35,13 +35,14 @@ class FreeswitchConnectionFake implements FreeswitchConnectioner {
     async on_hangup(cb: FreeswitchEventCallback) {
         this.hangups_cb.push(cb)
     }
+
 }
 
 class DialplanFetchEchoFake implements DialplanFetcher {
     fetch(url: string) {
         return [
             //configuracion del canal
-            {action: 'parameter', data: {name: 'on_hangup', publish: 'http://localhost'}},
+            {parameter: 'on_hangup', value: 'http://localhost'},
             {action: 'answer'},
             {action: 'echo'},
             {action: 'hangup'}
