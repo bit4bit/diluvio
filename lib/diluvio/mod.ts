@@ -2,14 +2,16 @@ export type FreeswitchEvent = Map<string, string>
 
 export type FreeswitchEventCallback = (event: FreeswitchEvent) => void
 
+export type FreeswitchCommandReply = string
+
 export interface FreeswitchConnectioner {
-    answer(): Promise<void>
+    answer(): Promise<FreeswitchCommandReply>
     execute(cmd: string, arg: string): Promise<null | string>
     api(cmd: string, arg: string): Promise<null | string>
-
+    
     hangup(reason: string): Promise<void>
     on_hangup(cb: FreeswitchEventCallback): void
-
+    
 }
 
 // @bit4bit 2021-04-15, typescript permite
@@ -19,11 +21,11 @@ export type DialplanActionerParameter = {
     value: string
 }
 
-export type DialplanActionerAction = {action: string, data?: string}
+export type DialplanActionerAction = {action: string, data?: string, dialplan?: string}
 export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter
 
 export interface DialplanFetcher {
-    fetch(url: string): Array<DialplanActioner> | []
+    fetch(url: string, data?: any): Array<DialplanActioner> | []
 }
 
 export interface DiluvioConnectioner {
@@ -48,7 +50,7 @@ class DiluvioConnection {
         this.dialplan = dialplanFetcher
         this.publish = publish
 
-        //handlers
+        //handlers for freeswitch events
         this.fsconn.on_hangup((event) => {
             this.publish.event(this.hangup_destination || 'http://localhost', event)
         })
@@ -64,28 +66,25 @@ class DiluvioConnection {
             // https://www.typescriptlang.org/docs/handbook/advanced-types.html
             if("action" in item) {
                 const plan = item as DialplanActionerAction
-                
+                let reply: FreeswitchCommandReply | null = null
+                        
                 switch(plan.action) {
                     case 'answer':
-                        await this.fsconn.answer()
+                        reply = await this.fsconn.answer()
                         break
                     case 'echo':
-                        await this.fsconn.execute('echo', '')
-                        break
-                    case 'dial':
-                        // refactor
-                        await this.fsconn.execute('dial', '')
-                        const destination = plan.data as string ?? ''
-                        if (destination != '') {
-                            const new_dialplan = this.dialplan.fetch(destination)
-                            return await this.run_dialplan(new_dialplan)
-                        }
+                        reply = await this.fsconn.execute('echo', '')
                         break
                     case 'hangup':
                         await this.fsconn.hangup(plan.data as string ?? 'NORMAL_CLEARING')
                         return
-                    case 'parameter':
+                }
 
+                // use new dialplan if asked
+                if (plan.dialplan) {
+                    const reply_dialplan = this.dialplan.fetch(plan.dialplan, {reply: reply})
+                    await this.run_dialplan(reply_dialplan)
+                    return
                 }
             }
             else if ("parameter" in item) {

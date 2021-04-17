@@ -13,6 +13,7 @@ class FreeswitchConnectionFake implements FreeswitchConnectioner {
     
     async answer() {
         this.actions.push('answer')
+        return '+OK'
     }
 
     async execute(cmd: string) {
@@ -50,28 +51,27 @@ class DialplanFetchEchoFake implements DialplanFetcher {
     }
 }
 
-class DialplanFetchDialFake implements DialplanFetcher {
-    fetchs: Array<string> = []
-    
+class DialplanFetchWithReplyFake implements DialplanFetcher {
     fetch(url: string) {
-        this.fetchs.push(url)
-
         switch(url) {
             case '/':
                 return [
-                    {action: 'dial', data: 'http://localhost/after-dial'}
+                    //configuracion del canal
+                    {parameter: 'on_hangup', value: 'http://localhost'},
+                    {action: 'answer', dialplan: 'http://localhost/after-answer'},
                 ]
-                break
-            case 'http://localhost/after-dial':
+            case 'http://localhost/after-answer':
                 return [
                     {action: 'hangup'}
                 ]
-                break
+            default:
+                return [
+                    {action: 'echo'}
+                ]
         }
-
-        return []
     }
 }
+
 
 class PublishFake implements Publisher {
     public actions: Array<string> = []
@@ -94,15 +94,13 @@ Deno.test('iteration 1 outbound', async () => {
 })
 
 
-Deno.test('iteration 2 outbound sub dialplan', async () => {
+Deno.test('iteration 3 outbound', async () => {
     const fsconn = new FreeswitchConnectionFake()
-    const dialplanFetch = new DialplanFetchDialFake()
+    const dialplanFetch = new DialplanFetchWithReplyFake()
     const publish = new PublishFake()
     
     const diluvio = new Diluvio(dialplanFetch, publish)
     await diluvio.connect(fsconn).process()
 
-    assertEquals(fsconn.actions, ['execute: dial', 'hangup'])
-    assertEquals(dialplanFetch.fetchs, ['/', 'http://localhost/after-dial'])
+    assertEquals(fsconn.actions, ['answer', 'hangup'])
 })
-
