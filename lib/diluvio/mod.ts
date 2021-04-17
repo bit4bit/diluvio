@@ -66,39 +66,47 @@ class DiluvioConnection {
         for(const item of dialplan) {
             // https://www.typescriptlang.org/docs/handbook/advanced-types.html
             if("action" in item) {
-                const plan = item as DialplanActionerAction
-                let reply: FreeswitchCommandReply | null = null
-                        
-                switch(plan.action) {
-                    case 'answer':
-                        reply = await this.fsconn.answer()
-                        break
-                    case 'echo':
-                        reply = await this.fsconn.execute('echo', '')
-                        break
-                    case 'hangup':
-                        await this.fsconn.hangup(plan.data as string ?? 'NORMAL_CLEARING')
-                        return
-                }
-
-                // use new dialplan if asked
-                if (plan.dialplan) {
-                    const reply_dialplan = this.dialplan.fetch(plan.dialplan, {reply: reply})
-                    await this.run_dialplan(reply_dialplan)
+                if (await this.execute_plan_action(item) == false) {
                     return
                 }
             }
             else if ("parameter" in item) {
-                const param = item as DialplanActionerParameter
-                
-                switch(param.parameter) {
-                    case 'on_hangup':
-                        this.hangup_destination = param.value
-                        break
-                    default:
-                        throw new Error(`parameter unkown handler ${param.parameter}`)
-                }
+                await this.apply_parameter(item)
             }
+        }
+    }
+
+    private async execute_plan_action(plan: DialplanActionerAction): Promise<boolean> {
+        let reply: FreeswitchCommandReply | null = null
+
+        switch(plan.action) {
+            case 'answer':
+                reply = await this.fsconn.answer()
+                break
+            case 'echo':
+                reply = await this.fsconn.execute('echo', '')
+                break
+            case 'hangup':
+                await this.fsconn.hangup(plan.data as string ?? 'NORMAL_CLEARING')
+                return false
+        }
+
+        // use new dialplan if asked
+        if (plan.dialplan) {
+            const reply_dialplan = this.dialplan.fetch(plan.dialplan, {reply: reply})
+            await this.run_dialplan(reply_dialplan)
+        }
+
+        return true
+    }
+
+    private async apply_parameter(param: DialplanActionerParameter) {
+        switch(param.parameter) {
+            case 'on_hangup':
+                this.hangup_destination = param.value
+                        break
+            default:
+                throw new Error(`parameter unkown handler ${param.parameter}`)
         }
     }
 }
