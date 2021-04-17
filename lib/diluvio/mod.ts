@@ -2,12 +2,13 @@ export type FreeswitchEvent = Map<string, string>
 
 export type FreeswitchEventCallback = (event: FreeswitchEvent) => void
 
-export type FreeswitchCommandReply = string
+export type FreeswitchCommandReply = string | null
+export type FreeswitchApiReply = string | null
 
 export interface FreeswitchConnectioner {
     answer(): Promise<FreeswitchCommandReply>
-    execute(cmd: string, arg: string): Promise<null | string>
-    api(cmd: string, arg: string): Promise<null | string>
+    execute(cmd: string, arg: string): Promise<FreeswitchCommandReply>
+    api(cmd: string, arg: string): Promise<FreeswitchApiReply>
     
     hangup(reason: string): Promise<void>
     on_hangup(cb: FreeswitchEventCallback): void
