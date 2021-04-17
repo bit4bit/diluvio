@@ -4,10 +4,10 @@ import {
     assertThrows
 } from 'https://deno.land/std@0.88.0/testing/asserts.ts'
 
-import { Diluvio, DialplanFetcher, Publisher, FreeswitchConnectioner } from './mod.ts'
+import { Diluvio, DialplanFetcher, Publisher, FreeswitchOutboundConnectioner } from './mod.ts'
 import type { FreeswitchEvent, FreeswitchEventCallback } from './mod.ts'
 
-class FreeswitchConnectionFake implements FreeswitchConnectioner {
+class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
     public actions: Array<string> = []
     public hangups_cb: Array<FreeswitchEventCallback> = []
     

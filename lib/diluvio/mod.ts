@@ -5,7 +5,7 @@ export type FreeswitchEventCallback = (event: FreeswitchEvent) => void
 export type FreeswitchCommandReply = string | null
 export type FreeswitchApiReply = string | null
 
-export interface FreeswitchConnectioner {
+export interface FreeswitchOutboundConnectioner {
     answer(): Promise<FreeswitchCommandReply>
     execute(cmd: string, arg: string): Promise<FreeswitchCommandReply>
     api(cmd: string, arg: string): Promise<FreeswitchApiReply>
@@ -40,13 +40,13 @@ export interface Publisher {
 
 
 class DiluvioConnection {
-    private fsconn: FreeswitchConnectioner
+    private fsconn: FreeswitchOutboundConnectioner
     private dialplan: DialplanFetcher
     private publish: Publisher
 
     private hangup_destination?: string
     
-    constructor(fsconn: FreeswitchConnectioner, dialplanFetcher: DialplanFetcher, publish: Publisher) {
+    constructor(fsconn: FreeswitchOutboundConnectioner, dialplanFetcher: DialplanFetcher, publish: Publisher) {
         this.fsconn = fsconn
         this.dialplan = dialplanFetcher
         this.publish = publish
@@ -112,7 +112,7 @@ export class Diluvio {
         this.publish = publish
     }
     
-    connect(fsconn: FreeswitchConnectioner): DiluvioConnectioner {
+    connect(fsconn: FreeswitchOutboundConnectioner): DiluvioConnectioner {
         return new DiluvioConnection(fsconn, this.dialplanFetcher, this.publish)
     }
 }
