@@ -6,7 +6,6 @@ export type FreeswitchCommandReply = string | null
 export type FreeswitchApiReply = string | null
 
 export interface FreeswitchOutboundConnectioner {
-    answer(): Promise<FreeswitchCommandReply>
     execute(cmd: string, arg: string): Promise<FreeswitchCommandReply>
     api(cmd: string, arg: string): Promise<FreeswitchApiReply>
     
@@ -45,7 +44,7 @@ class DiluvioConnection {
     private publish: Publisher
 
     private hangup_destination?: string
-    
+
     constructor(fsconn: FreeswitchOutboundConnectioner, dialplanFetcher: DialplanFetcher, publish: Publisher) {
         this.fsconn = fsconn
         this.dialplan = dialplanFetcher
@@ -80,15 +79,11 @@ class DiluvioConnection {
         let reply: FreeswitchCommandReply | null = null
 
         switch(plan.action) {
-            case 'answer':
-                reply = await this.fsconn.answer()
-                break
-            case 'echo':
-                reply = await this.fsconn.execute('echo', '')
-                break
             case 'hangup':
                 await this.fsconn.hangup(plan.data as string ?? 'NORMAL_CLEARING')
-                return false
+                return false;
+            default:
+                    reply = await this.fsconn.execute(plan.action, plan.data ?? '')
         }
 
         // use new dialplan if asked

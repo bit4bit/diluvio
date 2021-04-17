@@ -11,11 +11,6 @@ class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
     public actions: Array<string> = []
     public hangups_cb: Array<FreeswitchEventCallback> = []
     
-    async answer() {
-        this.actions.push('answer')
-        return '+OK'
-    }
-
     async execute(cmd: string) {
         this.actions.push(`execute: ${cmd}`)
         return null
@@ -89,7 +84,7 @@ Deno.test('iteration 1 outbound', async () => {
     const diluvio = new Diluvio(dialplanFetch, publish)
     await diluvio.connect(fsconn).process()
 
-    assertEquals(fsconn.actions, ['answer', 'execute: echo', 'hangup'])
+    assertEquals(fsconn.actions, ['execute: answer', 'execute: echo', 'hangup'])
     assertEquals(publish.actions, ['to: http://localhost'])
 })
 
@@ -102,5 +97,5 @@ Deno.test('iteration 3 outbound', async () => {
     const diluvio = new Diluvio(dialplanFetch, publish)
     await diluvio.connect(fsconn).process()
 
-    assertEquals(fsconn.actions, ['answer', 'hangup'])
+    assertEquals(fsconn.actions, ['execute: answer', 'hangup'])
 })
