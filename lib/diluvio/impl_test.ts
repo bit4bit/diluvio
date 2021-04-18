@@ -11,7 +11,7 @@ import {
 
 import { Message, FreeswitchOutboundTCP } from './impl.ts'
 
-const text_encoder = new TextEncoder()
+import { text_encoder } from '../deps.ts'
 
 Deno.test('sendmsg without arg', async () => {
     const out = new StringWriter()

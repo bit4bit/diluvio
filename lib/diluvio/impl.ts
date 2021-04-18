@@ -15,6 +15,12 @@ import {
     TextProtoReader
 } from 'https://deno.land/std@0.93.0/textproto/mod.ts'
 
+import {
+    text_decoder,
+    text_encoder
+} from '../deps.ts'
+
+
 export interface PduOptions {
     command: string
     app: string
@@ -49,17 +55,12 @@ export class FreeswitchOutboundTCP {
     private conn: any
     private reader: BufReader
     private callback_events: Array<FreeswitchCallbackEvent>
-    private text_encoder: TextEncoder
-    private text_decoder: TextDecoder
     private alive: boolean = true
     
     constructor(conn: Deno.Reader & Deno.Writer) {
         this.conn = conn
         this.reader = new BufReader(conn)
         this.callback_events = []
-        this.text_encoder = new TextEncoder()
-        this.text_decoder = new TextDecoder()
-
     }
 
     on_event(cb: any) {
@@ -80,7 +81,7 @@ export class FreeswitchOutboundTCP {
     }
 
     async ack() {
-        await this.conn.write(this.text_encoder.encode("connect\n\n"))
+        await this.conn.write(text_encoder.encode("connect\n\n"))
     }
     
     async process() {
@@ -123,7 +124,7 @@ export class FreeswitchOutboundTCP {
             if (more)
                 throw new Error('not handle when have more on line')
             
-            const sline: string = this.text_decoder.decode(line)
+            const sline: string = text_decoder.decode(line)
 
             if (sline == '')
                 break
@@ -162,7 +163,7 @@ export class FreeswitchOutboundTCP {
 
         }
 
-        return partials.map(partial => this.text_decoder.decode(partial))
+        return partials.map(partial => text_decoder.decode(partial))
             .join('')
     }
 }
