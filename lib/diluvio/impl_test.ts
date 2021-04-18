@@ -13,6 +13,42 @@ import { Message, FreeswitchOutboundTCP } from './impl.ts'
 
 import { text_encoder } from '../deps.ts'
 
+
+class FreeswitchOutboundServerFake {
+    private data: Array<string> = []
+    
+    add_data(data: string) {
+        this.data.push(data)
+    }
+
+    static listen(port: number) {
+        const srv = new FreeswitchOutboundServerFake()
+        // metodos estaticos pueden acceder a privados :)
+        srv.do_listen(port)
+        return srv
+    }
+    
+    private async do_listen(port: number) {
+        const listener = await Deno.listen({port: port})
+        const conn = await listener.accept()
+
+        await this.syn(conn)
+        
+        for(const data of this.data) {
+            const enc = text_encoder.encode(data)
+            await conn.write(enc)
+        }
+
+        conn.close()
+        listener.close()
+    }
+
+    private async syn(conn: Deno.Conn) {
+        const connect = new Uint8Array(9)
+        await conn.read(connect)
+    }
+}
+
 Deno.test('sendmsg without arg', async () => {
     const out = new StringWriter()
     
@@ -37,8 +73,9 @@ execute-app-arg: /tmp/test.ogg
 })
 
 Deno.test('dispatch event', async () => {
-    const listener = await Deno.listen({port: 9090})
-   
+    // simulate freeswitch event socket protocol
+    const fakefs = FreeswitchOutboundServerFake.listen(9090)
+
     const tcp_conn: Deno.Conn = await Deno.connect({port: 9090})
     const conn = new FreeswitchOutboundTCP(tcp_conn)
     const event = `Content-Length: 555
@@ -63,28 +100,15 @@ Task-Group: core
 Task-Runtime: 1436033914
 
 `
+    fakefs.add_data(event)
+    
     await conn.ack()
-
-    // simulate freeswitch event socket protocol
-    const arrangeListen = new Promise(async (resolve, reject) => {
-        const conn = await listener.accept()
-        
-        const connect = new Uint8Array(9)
-        await conn.read(connect)
-
-        const data = text_encoder.encode(event)
-        const n = await conn.write(data)
-        assertEquals(n, data.length)
-        conn.close()
-    })
-
 
 
     const wait_event = new Promise((resolve) => {
         conn.on_event((event: any) => {
             resolve(event)
             tcp_conn.close()
-            listener.close()
         })
     })
     
@@ -95,7 +119,8 @@ Task-Runtime: 1436033914
 })
 
 Deno.test('dispatch event partial', async () => {
-    const listener = await Deno.listen({port: 9090})
+    // simulate freeswitch event socket protocol
+    const fakefs = FreeswitchOutboundServerFake.listen(9090)
    
     const tcp_conn: Deno.Conn = await Deno.connect({port: 9090})
     const conn = new FreeswitchOutboundTCP(tcp_conn)
@@ -121,29 +146,16 @@ Task-Group: core
 Task-Runtime: 1436033914
 
 `]
+    for(const fragment of fragments) {
+        fakefs.add_data(fragment)
+    }
+
     await conn.ack()
     
-    // simulate freeswitch event socket protocol
-    const arrangeListen = new Promise(async (resolve, reject) => {
-        const conn = await listener.accept()
-        
-        const connect = new Uint8Array(9)
-        await conn.read(connect)
-
-        for(const fragment of fragments) {
-            const data = text_encoder.encode(fragment)
-            const n = await conn.write(data)
-            assertEquals(n, data.length)
-        }
-        
-        conn.close()
-    })
-
     const wait_event = new Promise((resolve) => {
         conn.on_event((event: any) => {
             resolve(event)
             tcp_conn.close()
-            listener.close()
         })
     })
     

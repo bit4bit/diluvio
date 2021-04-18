@@ -107,6 +107,8 @@ export class FreeswitchOutboundTCP {
                 } else {
                     return {kind: 'event', data: {}}
                 }
+            case 'command/reply':
+                return {kind: 'command', data: head['reply-text']}
             default:
                 throw new Error(`not implemented ${content_type}`)
         }
