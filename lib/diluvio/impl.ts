@@ -48,7 +48,7 @@ type FreeswitchCallbackEvent = (event: any) => void
 export class FreeswitchOutboundTCP {
     private conn: any
     private reader: BufReader
-    private cb_events: Array<FreeswitchCallbackEvent>
+    private callback_events: Array<FreeswitchCallbackEvent>
     private text_encoder: TextEncoder
     private text_decoder: TextDecoder
     private alive: boolean = true
@@ -56,20 +56,21 @@ export class FreeswitchOutboundTCP {
     constructor(conn: Deno.Reader & Deno.Writer) {
         this.conn = conn
         this.reader = new BufReader(conn)
-        this.cb_events = []
+        this.callback_events = []
         this.text_encoder = new TextEncoder()
         this.text_decoder = new TextDecoder()
+
     }
 
     on_event(cb: any) {
-        this.cb_events.push(cb)
+        this.callback_events.push(cb)
     }
 
-    async processOne() {
+    async iterate() {
         const pdu = await this.read()
         switch(pdu.kind) {
             case 'event':
-                for(const cb of this.cb_events) {
+                for(const cb of this.callback_events) {
                     cb(pdu.data)
                 }
                 break
@@ -77,17 +78,17 @@ export class FreeswitchOutboundTCP {
                 throw new Error('not know how handle pdu')
         }
     }
+
+    async ack() {
+        await this.conn.write(this.text_encoder.encode("connect\n\n"))
+    }
     
     async process() {
-        await this.conn.write(this.text_encoder.encode("connect\n\n"))
+        await this.ack()
 
-        while(this.alive) {
-            await this.processOne()
+        while(true) {
+            await this.iterate()
         }
-    }
-
-    close() {
-        this.alive = false
     }
     
     private async read(): Promise<Pdu> {
@@ -143,16 +144,25 @@ export class FreeswitchOutboundTCP {
     
     private async read_body(head: any): Promise<string | null> {
         const content_length: number = parseInt(head['content-length'])
-
+        const partials: Array<Uint8Array> = []
+        
         if (content_length > 0) {
-            console.log(`reading body ${content_length}`)
-            const body = new Uint8Array(content_length)
-            const n = await this.reader.read(body) ?? 0
-            if (content_length != n)
-                throw new Error(`mismatch content-length ${content_length} of data readed ${n}`)
-            return this.text_decoder.decode(body)
+            let bytes_to_read = content_length
+
+            while(bytes_to_read > 0) {
+                const body = new Uint8Array(content_length)
+                const n = await this.reader.read(body) ?? 0
+                if (n == 0)
+                    break
+                
+                partials.push(body)
+                if (n < content_length)
+                    bytes_to_read = content_length - n
+            }
+
         }
 
-        return null
+        return partials.map(partial => this.text_decoder.decode(partial))
+            .join('')
     }
 }
