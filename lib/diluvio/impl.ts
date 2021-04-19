@@ -156,7 +156,7 @@ export class FreeswitchOutboundTCP {
             let bytes_to_read = content_length
 
             while(bytes_to_read > 0) {
-                const body = new Uint8Array(content_length)
+                const body = new Uint8Array(bytes_to_read)
                 const n = await this.reader.read(body) ?? 0
                 if (n == 0)
                     break
