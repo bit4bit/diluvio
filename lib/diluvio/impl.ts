@@ -21,6 +21,8 @@ import {
 } from '../deps.ts'
 
 
+type Head = {[key: string]: string}
+
 export interface PduOptions {
     command: string
     app: string
@@ -29,7 +31,7 @@ export interface PduOptions {
 
 interface Pdu {
     kind: string
-    data:  any
+    data: Head | string
 }
 
 export class Message {
@@ -49,21 +51,22 @@ execute-app-name: ${opts.app}`]
     }
 }
 
-type FreeswitchCallbackEvent = (event: any) => void
+type FreeswitchCallbackEvent = (event: FreeswitchEvent) => void
+type FreeswitchConn = Deno.Reader & Deno.Writer
 
 export class FreeswitchOutboundTCP {
-    private conn: any
+    private conn: FreeswitchConn
     private reader: BufReader
     private callback_events: Array<FreeswitchCallbackEvent>
     private alive: boolean = true
     
-    constructor(conn: Deno.Reader & Deno.Writer) {
+    constructor(conn: FreeswitchConn) {
         this.conn = conn
         this.reader = new BufReader(conn)
         this.callback_events = []
     }
 
-    on_event(cb: any) {
+    on_event(cb: FreeswitchCallbackEvent) {
         this.callback_events.push(cb)
     }
 
@@ -72,7 +75,7 @@ export class FreeswitchOutboundTCP {
         switch(pdu.kind) {
             case 'event':
                 for(const cb of this.callback_events) {
-                    cb(pdu.data)
+                    cb(pdu.data as Head)
                 }
                 break
             default:
@@ -93,7 +96,7 @@ export class FreeswitchOutboundTCP {
     }
     
     private async read(): Promise<Pdu> {
-        const head: any = await this.read_head(this.reader)
+        const head: Head = await this.read_head(this.reader)
         const body: string | null = await this.read_body(head)
 
         const content_type = head['content-type']
@@ -115,7 +118,7 @@ export class FreeswitchOutboundTCP {
     }
 
     private async read_head(buff: BufReader) {
-        const head: any = {}
+        const head: Head = {}
         
         while (true) {
             const result = await buff.readLine()
@@ -145,7 +148,7 @@ export class FreeswitchOutboundTCP {
         return head
     }
     
-    private async read_body(head: any): Promise<string | null> {
+    private async read_body(head: Head): Promise<string | null> {
         const content_length: number = parseInt(head['content-length'])
         const partials: Array<Uint8Array> = []
         

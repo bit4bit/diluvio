@@ -1,4 +1,4 @@
-export type FreeswitchEvent = Map<string, string>
+export type FreeswitchEvent = {[key: string]: string}
 
 export type FreeswitchEventCallback = (event: FreeswitchEvent) => void
 

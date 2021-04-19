@@ -24,7 +24,7 @@ class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
     async hangup(reason: string) {
         this.actions.push('hangup')
         for(const cb of this.hangups_cb) {
-            cb(new Map())
+            cb({})
         }
     }
     
