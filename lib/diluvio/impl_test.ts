@@ -9,18 +9,33 @@ import {
     Buffer,
 } from "https://deno.land/std@0.93.0/io/mod.ts";
 
+import {
+    TextProtoReader
+} from 'https://deno.land/std@0.93.0/textproto/mod.ts'
+
 import { Message, FreeswitchOutboundTCP, FreeswitchCallbackType } from './impl.ts'
 
 import { text_encoder } from '../deps.ts'
 
 
+interface FreeswitchCommandReply {
+    command: string
+    arg: string | null
+    reply: string
+}
+
 class FreeswitchOutboundServerFake {
     private data: Array<string> = []
-    
+    private replies_command: Array<FreeswitchCommandReply> = []
+
     add_data(data: string) {
         this.data.push(data)
     }
 
+    add_reply_command(cmd: string, arg: string | null, reply: string) {
+        this.replies_command.push({command: cmd, arg: arg, reply: reply})
+    }
+    
     static listen(port: number) {
         const srv = new FreeswitchOutboundServerFake()
         // metodos estaticos pueden acceder a privados :)
@@ -164,3 +179,20 @@ Task-Runtime: 1436033914
     const expected_event: any = await wait_event
     assertEquals(expected_event['event-name'], 'RE_SCHEDULE')
 })
+
+/*
+Deno.test('dispatch comman/reply', async () => {
+    const fakefs = FreeswitchOutboundServerFake.listen(9090)
+    const tcp_conn: Deno.Conn = await Deno.connect({port: 9090})
+    const conn = new FreeswitchOutboundTCP(tcp_conn)
+
+    fakefs.add_reply_command('uptime', '9999')
+    
+    await conn.ack()
+
+    resp = await conn.execute('uptime')
+    await conn.iterate()
+
+    assertEquals(resp.reply, '9999')
+})
+*/

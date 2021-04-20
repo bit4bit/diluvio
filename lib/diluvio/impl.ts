@@ -52,57 +52,22 @@ execute-app-name: ${opts.app}`]
 }
 
 type FreeswitchCallbackEvent = (event: FreeswitchEvent) => void
+type FreeswitchCallbackCommand = (reply: string) => void
 type FreeswitchConn = Deno.Reader & Deno.Writer
 
 export enum FreeswitchCallbackType {
-    Event = 'event'
+    Event = 'event',
+    CommandReply = 'command/reply'
 }
 
-export class FreeswitchOutboundTCP {
-    private conn: FreeswitchConn
+export class FreeswitchProtocolParser {
     private reader: BufReader
-    private callbacks: {[key: string]: Array<FreeswitchCallbackEvent>}
-    private alive: boolean = true
-    
-    constructor(conn: FreeswitchConn) {
-        this.conn = conn
-        this.reader = new BufReader(conn)
-        this.callbacks = {}
+
+    constructor(reader: BufReader) {
+        this.reader = reader
     }
 
-    on(event: FreeswitchCallbackType, cb: FreeswitchCallbackEvent) {
-        if (!this.callbacks[event]) this.callbacks[event] = []
-        
-        this.callbacks[event].push(cb)
-    }
-
-    async iterate() {
-        const pdu = await this.read()
-        switch(pdu.kind) {
-            case 'event':
-                const callbacks = this.callbacks[FreeswitchCallbackType.Event] || []
-                for(const cb of callbacks) {
-                    cb(pdu.data as Head)
-                }
-                break
-            default:
-                throw new Error('not know how handle pdu')
-        }
-    }
-
-    async ack() {
-        await this.conn.write(text_encoder.encode("connect\n\n"))
-    }
-    
-    async process() {
-        await this.ack()
-
-        while(true) {
-            await this.iterate()
-        }
-    }
-    
-    private async read(): Promise<Pdu> {
+    async read(): Promise<Pdu> {
         const head: Head = await this.read_head(this.reader)
         const body: string | null = await this.read_body(head)
 
@@ -178,4 +143,90 @@ export class FreeswitchOutboundTCP {
         return partials.map(partial => text_decoder.decode(partial))
             .join('')
     }
+}
+
+export class FreeswitchOutboundTCP {
+    private conn: FreeswitchConn
+    private reader: BufReader
+    private callbacks: {[key: string]: Array<FreeswitchCallbackEvent>}
+    private callbacks_once: {[key: string]: Array<FreeswitchCallbackEvent | FreeswitchCallbackCommand>}
+    private alive: boolean = true
+    private parser: FreeswitchProtocolParser
+
+    constructor(conn: FreeswitchConn) {
+        this.conn = conn
+        this.reader = new BufReader(conn)
+        this.parser = new FreeswitchProtocolParser(this.reader)
+        this.callbacks = {}
+        this.callbacks_once = {}
+    }
+
+    on(event: FreeswitchCallbackType, cb: FreeswitchCallbackEvent) {
+        if (!this.callbacks[event]) this.callbacks[event] = []
+        
+        this.callbacks[event].push(cb)
+    }
+
+    once(event: FreeswitchCallbackType, cb: FreeswitchCallbackEvent | FreeswitchCallbackCommand) {
+        if (!this.callbacks_once[event]) this.callbacks_once[event] = []
+        this.callbacks_once[event].push(cb)
+    }
+    
+    async execute(cmd: string, arg?: string) {
+        return await this.sendmsg('execute', cmd, arg)
+    }
+    
+    async iterate() {
+        const pdu = await this.parser.read()
+        switch(pdu.kind) {
+            case 'event':
+                let callbacks = this.callbacks[FreeswitchCallbackType.Event] || []
+                for(const cb of callbacks) {
+                    cb(pdu.data as Head)
+                }
+                break
+            case 'command':
+                let callbacks_once = this.callbacks_once[FreeswitchCallbackType.CommandReply] || []
+                for (const cb of callbacks_once) {
+                    const cbc = cb as FreeswitchCallbackCommand
+                    cbc(pdu.data as string)
+                }
+                break
+            default:
+                throw new Error('not know how handle pdu')
+        }
+    }
+
+    async ack() {
+        await this.conn.write(text_encoder.encode("connect\n\n"))
+    }
+    
+    async process() {
+        await this.ack()
+
+        while(true) {
+            await this.iterate()
+        }
+    }
+
+    private async sendmsg(cmd: string, app: string, arg?: string) {
+        Message.writeTo(this.conn, {
+            command: cmd,
+            app: app,
+            arg: arg
+        })
+        const reply: string = await new Promise((resolve) => {
+            this.once(FreeswitchCallbackType.CommandReply, (reply: string) => {
+                resolve(reply)
+            })
+        })
+
+        if (reply.startsWith('-ERR')) {
+            return {ok: false, reply: reply}
+        } else {
+            return {ok: true, reply: reply}
+        }
+    }
+    
+
 }
