@@ -54,27 +54,34 @@ execute-app-name: ${opts.app}`]
 type FreeswitchCallbackEvent = (event: FreeswitchEvent) => void
 type FreeswitchConn = Deno.Reader & Deno.Writer
 
+export enum FreeswitchCallbackType {
+    Event = 'event'
+}
+
 export class FreeswitchOutboundTCP {
     private conn: FreeswitchConn
     private reader: BufReader
-    private callback_events: Array<FreeswitchCallbackEvent>
+    private callbacks: {[key: string]: Array<FreeswitchCallbackEvent>}
     private alive: boolean = true
     
     constructor(conn: FreeswitchConn) {
         this.conn = conn
         this.reader = new BufReader(conn)
-        this.callback_events = []
+        this.callbacks = {}
     }
 
-    on_event(cb: FreeswitchCallbackEvent) {
-        this.callback_events.push(cb)
+    on(event: FreeswitchCallbackType, cb: FreeswitchCallbackEvent) {
+        if (!this.callbacks[event]) this.callbacks[event] = []
+        
+        this.callbacks[event].push(cb)
     }
 
     async iterate() {
         const pdu = await this.read()
         switch(pdu.kind) {
             case 'event':
-                for(const cb of this.callback_events) {
+                const callbacks = this.callbacks[FreeswitchCallbackType.Event] || []
+                for(const cb of callbacks) {
                     cb(pdu.data as Head)
                 }
                 break

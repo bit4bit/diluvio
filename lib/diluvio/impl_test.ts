@@ -9,7 +9,7 @@ import {
     Buffer,
 } from "https://deno.land/std@0.93.0/io/mod.ts";
 
-import { Message, FreeswitchOutboundTCP } from './impl.ts'
+import { Message, FreeswitchOutboundTCP, FreeswitchCallbackType } from './impl.ts'
 
 import { text_encoder } from '../deps.ts'
 
@@ -106,7 +106,7 @@ Task-Runtime: 1436033914
 
 
     const wait_event = new Promise((resolve) => {
-        conn.on_event((event: any) => {
+        conn.on(FreeswitchCallbackType.Event, (event: any) => {
             resolve(event)
             tcp_conn.close()
         })
@@ -153,7 +153,7 @@ Task-Runtime: 1436033914
     await conn.ack()
     
     const wait_event = new Promise((resolve) => {
-        conn.on_event((event: any) => {
+        conn.on(FreeswitchCallbackType.Event, (event: any) => {
             resolve(event)
             tcp_conn.close()
         })
