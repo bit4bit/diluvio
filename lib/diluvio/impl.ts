@@ -2,7 +2,7 @@ import {
     FreeswitchOutboundConnectioner,
     FreeswitchEvent,
     FreeswitchCommandReply,
-    FreeswitchApiReply
+    FreeswitchApiResponse
 } from './mod.ts'
 
 import {
@@ -57,7 +57,9 @@ type FreeswitchConn = Deno.Reader & Deno.Writer
 
 export enum FreeswitchCallbackType {
     Event = 'event',
-    CommandReply = 'command/reply'
+    CommandReply = 'command/reply',
+    ApiResponse = 'api/response',
+    AuthResponse = 'auth/response'
 }
 
 export class FreeswitchProtocolParser {
@@ -82,10 +84,16 @@ export class FreeswitchProtocolParser {
                 } else {
                     return {kind: 'event', data: {}}
                 }
+            case 'api/response':
+                return {kind: 'api', data: body ?? ''}
             case 'command/reply':
                 return {kind: 'command', data: head['reply-text']}
+            case 'auth/request':
+                return {kind: 'auth/response', data: body ?? ''}
+            case 'text/disconnect-notice':
+                return {kind: 'api', data: 'disconnect'}
             default:
-                throw new Error(`not implemented ${content_type}`)
+                return {kind: 'omit', data: ''}
         }
     }
 
@@ -94,17 +102,19 @@ export class FreeswitchProtocolParser {
         
         while (true) {
             const result = await buff.readLine()
-            if (result === null)
-                break
 
+            if (result === null) {
+                break
+            }
             const { line, more } = result
             if (more)
                 throw new Error('not handle when have more on line')
-            
+
             const sline: string = text_decoder.decode(line)
 
-            if (sline == '')
+            if (sline == '') {
                 break
+            }
 
             const [key, value] = sline.split(':')
             head[key.toLowerCase()] = value.trim()
@@ -127,15 +137,18 @@ export class FreeswitchProtocolParser {
         if (content_length > 0) {
             let bytes_to_read = content_length
 
+
             while(bytes_to_read > 0) {
                 const body = new Uint8Array(bytes_to_read)
                 const n = await this.reader.read(body) ?? 0
                 if (n == 0)
                     break
-                
+
                 partials.push(body)
                 if (n < content_length)
                     bytes_to_read = content_length - n
+                else
+                    break
             }
 
         }
@@ -145,14 +158,16 @@ export class FreeswitchProtocolParser {
     }
 }
 
-export class FreeswitchOutboundTCP {
-    private conn: FreeswitchConn
-    private reader: BufReader
+abstract class FreeswitchConnectionTCP  {
+    protected conn: FreeswitchConn
+    protected reader: BufReader
     private callbacks: {[key: string]: Array<FreeswitchCallbackEvent>}
     private callbacks_once: {[key: string]: Array<FreeswitchCallbackEvent | FreeswitchCallbackCommand>}
     private alive: boolean = true
     private parser: FreeswitchProtocolParser
 
+    protected abstract before_process(): Promise<void>
+    
     constructor(conn: FreeswitchConn) {
         this.conn = conn
         this.reader = new BufReader(conn)
@@ -161,6 +176,24 @@ export class FreeswitchOutboundTCP {
         this.callbacks_once = {}
     }
 
+    async execute(cmd: string, arg: string): Promise<FreeswitchCommandReply> {
+        const reply = await this.sendmsg('execute', cmd, arg)
+        return reply.reply
+    }
+
+    async api(cmd: string, arg: string) {
+        this.sendcmd(`api ${cmd} ${arg}`)
+
+        const wait_reply: Promise<string> = new Promise((resolve) => {
+            this.once(FreeswitchCallbackType.ApiResponse, (reply: string) => {
+                resolve(reply)
+            })
+        })       
+
+
+        return await wait_reply
+    }
+    
     on(event: FreeswitchCallbackType, cb: FreeswitchCallbackEvent) {
         if (!this.callbacks[event]) this.callbacks[event] = []
         
@@ -172,12 +205,10 @@ export class FreeswitchOutboundTCP {
         this.callbacks_once[event].push(cb)
     }
     
-    async execute(cmd: string, arg?: string) {
-        return await this.sendmsg('execute', cmd, arg)
-    }
     
     async iterate() {
         const pdu = await this.parser.read()
+
         switch(pdu.kind) {
             case 'event':
                 let callbacks = this.callbacks[FreeswitchCallbackType.Event] || []
@@ -186,30 +217,47 @@ export class FreeswitchOutboundTCP {
                 }
                 break
             case 'command':
-                let callbacks_once = this.callbacks_once[FreeswitchCallbackType.CommandReply] || []
+                let callbacks_once = this.get_callbacks_once_for(FreeswitchCallbackType.CommandReply)
                 for (const cb of callbacks_once) {
                     const cbc = cb as FreeswitchCallbackCommand
                     cbc(pdu.data as string)
                 }
+                break
+            case 'api':
+                let callbacks_once_api = this.get_callbacks_once_for(FreeswitchCallbackType.ApiResponse)
+                for (const cb of callbacks_once_api) {
+                    const cbc = cb as FreeswitchCallbackCommand
+                    cbc(pdu.data as string)
+                }
+                break
+            case 'auth/response':
+                let callbacks_once_auth = this.get_callbacks_once_for(FreeswitchCallbackType.AuthResponse)
+                for (const cb of callbacks_once_auth) {
+                    const cbc = cb as FreeswitchCallbackCommand
+                    cbc(pdu.data as string)
+                }
+                break
+            case 'omit':
                 break
             default:
                 throw new Error('not know how handle pdu')
         }
     }
 
-    async ack() {
-        await this.conn.write(text_encoder.encode("connect\n\n"))
-    }
     
     async process() {
-        await this.ack()
-
+        await this.before_process()
+        
         while(true) {
             await this.iterate()
         }
     }
 
-    private async sendmsg(cmd: string, app: string, arg?: string) {
+    protected async sendcmd(cmd: string) {
+        await this.conn.write(text_encoder.encode(cmd + "\n\n"))
+    }
+
+    protected async sendmsg(cmd: string, app: string, arg?: string) {
         Message.writeTo(this.conn, {
             command: cmd,
             app: app,
@@ -227,6 +275,44 @@ export class FreeswitchOutboundTCP {
             return {ok: true, reply: reply}
         }
     }
-    
+
+    private get_callbacks_once_for(event: FreeswitchCallbackType): Array<FreeswitchCallbackEvent | FreeswitchCallbackCommand> | [] {
+        const callbacks = Array.from(this.callbacks_once[event] || [])
+        this.callbacks_once[event].length = 0
+        return callbacks
+    }
+}
+
+export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP {
+    protected async before_process() {
+        this.ack()
+    }
+
+    async ack() {
+        await this.conn.write(text_encoder.encode("connect\n\n"))
+    }
+}
+
+export class FreeswitchInboundTCP extends FreeswitchConnectionTCP {
+    protected async before_process() {
+    }
+
+    async auth(pass: string) {
+
+        const wait_auth_reply: Promise<string> = new Promise((resolve) => {
+            this.once(FreeswitchCallbackType.CommandReply, (reply: string) => {
+                resolve(reply)
+            })
+        })
+
+        await new Promise((resolve) => {
+            this.once(FreeswitchCallbackType.AuthResponse, (reply: string) => {
+                this.sendcmd(`auth ${pass}`)
+                resolve(reply)
+            })
+        })       
+
+        return await wait_auth_reply
+    }
 
 }

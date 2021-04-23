@@ -3,11 +3,11 @@ export type FreeswitchEvent = {[key: string]: string}
 export type FreeswitchEventCallback = (event: FreeswitchEvent) => void
 
 export type FreeswitchCommandReply = string | null
-export type FreeswitchApiReply = string | null
+export type FreeswitchApiResponse = string | null
 
 export interface FreeswitchOutboundConnectioner {
     execute(cmd: string, arg: string): Promise<FreeswitchCommandReply>
-    api(cmd: string, arg: string): Promise<FreeswitchApiReply>
+    api(cmd: string, arg: string): Promise<FreeswitchApiResponse>
     
     hangup(reason: string): Promise<void>
     on_hangup(cb: FreeswitchEventCallback): void

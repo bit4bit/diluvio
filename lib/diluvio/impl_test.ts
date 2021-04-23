@@ -194,5 +194,4 @@ Deno.test('dispatch comman/reply', async () => {
     await conn.iterate()
 
     assertEquals(resp.reply, '9999')
-})
-*/
+})*/
