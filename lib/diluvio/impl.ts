@@ -16,7 +16,7 @@ import {
 
 type Head = {[key: string]: string}
 
-export interface PduOptions {
+export interface PduCommand{
     command: string
     app: string
     arg?: string
@@ -28,7 +28,7 @@ interface Pdu {
 }
 
 export class Message {
-    static async writeTo(w: Deno.Writer, opts: PduOptions) {
+    static async writeTo(w: Deno.Writer, opts: PduCommand) {
         const pdu = [`sendmsg
 call-command: ${opts.command}
 execute-app-name: ${opts.app}`]
@@ -52,7 +52,7 @@ export enum FreeswitchCallbackType {
     Event = 'event',
     CommandReply = 'command/reply',
     ApiResponse = 'api/response',
-    AuthResponse = 'auth/response'
+    AuthRequest = 'auth/request'
 }
 
 export class FreeswitchProtocolParser {
@@ -82,11 +82,11 @@ export class FreeswitchProtocolParser {
             case 'command/reply':
                 return {kind: 'command', data: head['reply-text']}
             case 'auth/request':
-                return {kind: 'auth/response', data: body ?? ''}
+                return {kind: 'auth/request', data: body ?? ''}
             case 'text/disconnect-notice':
                 return {kind: 'api', data: 'disconnect'}
             default:
-                return {kind: 'omit', data: ''}
+                return {kind: 'unknown', data: ''}
         }
     }
 
@@ -208,10 +208,10 @@ abstract class FreeswitchConnectionTCP  {
             case 'api':
                 this.run_callbacks_once_for(FreeswitchCallbackType.ApiResponse, pdu.data as string)
                 break
-            case 'auth/response':
-                this.run_callbacks_once_for(FreeswitchCallbackType.AuthResponse, pdu.data as string)
+            case 'auth/request':
+                this.run_callbacks_once_for(FreeswitchCallbackType.AuthRequest, pdu.data as string)
                 break
-            case 'omit':
+            case 'unknown':
                 break
             default:
                 throw new Error('not know how handle pdu')
@@ -281,7 +281,7 @@ export class FreeswitchInboundTCP extends FreeswitchConnectionTCP {
     }
 
     async auth(pass: string) {
-        await this.wait_reply(FreeswitchCallbackType.AuthResponse)
+        await this.wait_reply(FreeswitchCallbackType.AuthRequest)
         this.sendcmd(`auth ${pass}`)
 
         return await this.wait_reply(FreeswitchCallbackType.CommandReply)
