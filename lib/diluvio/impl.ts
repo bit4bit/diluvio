@@ -106,7 +106,7 @@ export class FreeswitchProtocolParser {
             const result = await buff.readLine()
 
             if (result === null) {
-                break
+                throw new Error('not known how to handle result === null')
             }
             const { line, more } = result
             if (more)
@@ -115,7 +115,7 @@ export class FreeswitchProtocolParser {
             const sline: string = text_decoder.decode(line)
 
             if (sline == '') {
-                break
+                throw new Error('not know how to handle sline == ""')
             }
 
             const [key, value] = sline.split(':')
@@ -303,8 +303,7 @@ export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements Fr
 
     on_hangup(cb: FreeswitchEventCallback): void {
         this.on(FreeswitchCallbackType.Event, (event: FreeswitchEvent) => {
-            // TODO incorrect implementation
-            if (event['Event-Name'] == 'CHANNEL_HANGUP') {
+            if (event['event-name'] == 'CHANNEL_HANGUP_COMPLETE') {
                 cb(event)
             }
         })
