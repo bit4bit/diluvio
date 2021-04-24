@@ -37,7 +37,7 @@ execute-app-name: ${opts.app}`]
         }
         pdu.push("\n")
         
-        const data = new TextEncoder().encode(pdu.join("\n"))
+        const data = text_encoder.encode(pdu.join("\n"))
         const n = await w.write(data)
         if (n != data.length)
             throw new Error('mismatch data length')
