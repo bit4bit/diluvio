@@ -8,14 +8,7 @@ import {
 import {
     BufReader,
     Buffer,
-    StringReader
-} from 'https://deno.land/std@0.93.0/io/mod.ts'
-
-import {
-    TextProtoReader
-} from 'https://deno.land/std@0.93.0/textproto/mod.ts'
-
-import {
+    StringReader,
     text_decoder,
     text_encoder,
 } from '../deps.ts'
