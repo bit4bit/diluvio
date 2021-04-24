@@ -52,7 +52,8 @@ export enum FreeswitchCallbackType {
     Event = 'event',
     CommandReply = 'command/reply',
     ApiResponse = 'api/response',
-    AuthRequest = 'auth/request'
+    AuthRequest = 'auth/request',
+    Disconnect = 'disconnect'
 }
 
 export class FreeswitchProtocolParser {
@@ -91,7 +92,7 @@ export class FreeswitchProtocolParser {
             case 'auth/request':
                 return {kind: 'auth/request', data: body ?? ''}
             case 'text/disconnect-notice':
-                return {kind: 'api', data: 'disconnect'}
+                return {kind: 'disconnect', data: body ?? ''}
             default:
                 return {kind: 'unknown', data: ''}
         }
@@ -222,6 +223,9 @@ abstract class FreeswitchConnectionTCP  {
                 break
             case 'auth/request':
                 this.run_callbacks_once_for(FreeswitchCallbackType.AuthRequest, pdu.data as string)
+                break
+            case 'disconnect':
+                this.run_callbacks_once_for(FreeswitchCallbackType.Disconnect, pdu.data as string)
                 break
             case 'unknown':
                 break
