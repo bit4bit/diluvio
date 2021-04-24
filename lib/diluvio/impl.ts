@@ -2,7 +2,8 @@ import {
     FreeswitchOutboundConnectioner,
     FreeswitchEvent,
     FreeswitchCommandReply,
-    FreeswitchApiResponse
+    FreeswitchApiResponse,
+    FreeswitchEventCallback,
 } from './mod.ts'
 
 import {
@@ -282,7 +283,20 @@ abstract class FreeswitchConnectionTCP  {
     }
 }
 
-export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP {
+export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements FreeswitchOutboundConnectioner {
+
+    async hangup(reason: string): Promise<void> {
+        await this.sendmsg('execute', 'hangup', reason)
+    }
+
+    on_hangup(cb: FreeswitchEventCallback): void {
+        this.on(FreeswitchCallbackType.Event, (event: FreeswitchEvent) => {
+            // TODO incorrect implementation
+            if (event['Event-Name'] == 'CHANNEL_HANGUP') {
+                cb(event)
+            }
+        })
+    }
     protected async before_process() {
         this.ack()
     }
