@@ -17,7 +17,7 @@ import {
 
 import {
     text_decoder,
-    text_encoder
+    text_encoder,
 } from '../deps.ts'
 
 
@@ -165,7 +165,7 @@ abstract class FreeswitchConnectionTCP  {
     private callbacks_once: {[key: string]: Array<FreeswitchCallbackEvent | FreeswitchCallbackCommand>}
     private alive: boolean = true
     private parser: FreeswitchProtocolParser
-
+    
     protected abstract before_process(): Promise<void>
     
     constructor(conn: FreeswitchConn) {
