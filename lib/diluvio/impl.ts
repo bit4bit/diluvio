@@ -69,13 +69,20 @@ export class FreeswitchProtocolParser {
         const content_type = head['content-type']
 
         switch(content_type) {
+            case 'text/event-json':
+                if (body) {
+                    const event = JSON.parse(body)
+                    return {kind: 'event', data: event}
+                } else {
+                    throw new Error('failed to get body for event json')
+                }
             case 'text/event-plain':
                 if (body) {
                     const buff = new BufReader(new StringReader(body))
                     const header = await this.read_head(buff)
                     return {kind: 'event', data: header}
                 } else {
-                    return {kind: 'event', data: {}}
+                    throw new Error('failed to get body for event plain')
                 }
             case 'api/response':
                 return {kind: 'api', data: body ?? ''}
@@ -177,6 +184,11 @@ abstract class FreeswitchConnectionTCP  {
     async api(cmd: string, arg: string) {
         this.sendcmd(`api ${cmd} ${arg}`)
         return await this.wait_reply(FreeswitchCallbackType.ApiResponse)
+    }
+
+    async event(kind: string, events: Array<string>): Promise<string> {
+        this.sendcmd(`event ${kind} ${events.join(",")}`)
+        return await this.wait_reply(FreeswitchCallbackType.CommandReply)
     }
     
     on(event: FreeswitchCallbackType, cb: FreeswitchCallbackEvent) {
