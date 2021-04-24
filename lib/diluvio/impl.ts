@@ -217,25 +217,13 @@ abstract class FreeswitchConnectionTCP  {
                 }
                 break
             case 'command':
-                let callbacks_once = this.get_callbacks_once_for(FreeswitchCallbackType.CommandReply)
-                for (const cb of callbacks_once) {
-                    const cbc = cb as FreeswitchCallbackCommand
-                    cbc(pdu.data as string)
-                }
+                this.run_callbacks_once_for(FreeswitchCallbackType.CommandReply, pdu.data as string)
                 break
             case 'api':
-                let callbacks_once_api = this.get_callbacks_once_for(FreeswitchCallbackType.ApiResponse)
-                for (const cb of callbacks_once_api) {
-                    const cbc = cb as FreeswitchCallbackCommand
-                    cbc(pdu.data as string)
-                }
+                this.run_callbacks_once_for(FreeswitchCallbackType.ApiResponse, pdu.data as string)
                 break
             case 'auth/response':
-                let callbacks_once_auth = this.get_callbacks_once_for(FreeswitchCallbackType.AuthResponse)
-                for (const cb of callbacks_once_auth) {
-                    const cbc = cb as FreeswitchCallbackCommand
-                    cbc(pdu.data as string)
-                }
+                this.run_callbacks_once_for(FreeswitchCallbackType.AuthResponse, pdu.data as string)
                 break
             case 'omit':
                 break
@@ -276,10 +264,15 @@ abstract class FreeswitchConnectionTCP  {
         }
     }
 
-    private get_callbacks_once_for(event: FreeswitchCallbackType): Array<FreeswitchCallbackEvent | FreeswitchCallbackCommand> | [] {
+    private run_callbacks_once_for(event: FreeswitchCallbackType, data: string): void {
         const callbacks = Array.from(this.callbacks_once[event] || [])
         this.callbacks_once[event].length = 0
-        return callbacks
+        
+        for (const cb of callbacks) {
+            const cbc = cb as FreeswitchCallbackCommand;
+            cbc(data)
+        }
+        
     }
 }
 
