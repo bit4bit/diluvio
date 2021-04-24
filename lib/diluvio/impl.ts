@@ -257,7 +257,7 @@ abstract class FreeswitchConnectionTCP  {
         }
     }
 
-    private wait_reply(kind: FreeswitchCallbackType): Promise<string> {
+    protected wait_reply(kind: FreeswitchCallbackType): Promise<string> {
         return new Promise((resolve) => {
             this.once(kind, (reply: string) => {
                 resolve(reply)
@@ -281,21 +281,10 @@ export class FreeswitchInboundTCP extends FreeswitchConnectionTCP {
     }
 
     async auth(pass: string) {
+        await this.wait_reply(FreeswitchCallbackType.AuthResponse)
+        this.sendcmd(`auth ${pass}`)
 
-        const wait_auth_reply: Promise<string> = new Promise((resolve) => {
-            this.once(FreeswitchCallbackType.CommandReply, (reply: string) => {
-                resolve(reply)
-            })
-        })
-
-        await new Promise((resolve) => {
-            this.once(FreeswitchCallbackType.AuthResponse, (reply: string) => {
-                this.sendcmd(`auth ${pass}`)
-                resolve(reply)
-            })
-        })       
-
-        return await wait_auth_reply
+        return await this.wait_reply(FreeswitchCallbackType.CommandReply)
     }
 
 }
