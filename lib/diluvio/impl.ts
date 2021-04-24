@@ -155,7 +155,7 @@ abstract class FreeswitchConnectionTCP  {
     protected conn: FreeswitchConn
     protected reader: BufReader
     private callbacks: {[key: string]: Array<FreeswitchCallbackEvent>}
-    private callbacks_once: {[key: string]: Array<FreeswitchCallbackEvent | FreeswitchCallbackCommand>}
+    private callbacks_once: {[key: string]: Array<FreeswitchCallbackCommand>}
     private alive: boolean = true
     private parser: FreeswitchProtocolParser
     
@@ -193,7 +193,7 @@ abstract class FreeswitchConnectionTCP  {
         this.callbacks[event].push(cb)
     }
 
-    once(event: FreeswitchCallbackType, cb: FreeswitchCallbackEvent | FreeswitchCallbackCommand) {
+    once(event: FreeswitchCallbackType, cb: FreeswitchCallbackCommand) {
         if (!this.callbacks_once[event]) this.callbacks_once[event] = []
         this.callbacks_once[event].push(cb)
     }
@@ -265,7 +265,6 @@ abstract class FreeswitchConnectionTCP  {
             const cbc = cb as FreeswitchCallbackCommand;
             cbc(data)
         }
-        
     }
 }
 
