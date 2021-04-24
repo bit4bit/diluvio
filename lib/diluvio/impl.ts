@@ -176,15 +176,7 @@ abstract class FreeswitchConnectionTCP  {
 
     async api(cmd: string, arg: string) {
         this.sendcmd(`api ${cmd} ${arg}`)
-
-        const wait_reply: Promise<string> = new Promise((resolve) => {
-            this.once(FreeswitchCallbackType.ApiResponse, (reply: string) => {
-                resolve(reply)
-            })
-        })       
-
-
-        return await wait_reply
+        return await this.wait_reply(FreeswitchCallbackType.ApiResponse)
     }
     
     on(event: FreeswitchCallbackType, cb: FreeswitchCallbackEvent) {
@@ -195,6 +187,7 @@ abstract class FreeswitchConnectionTCP  {
 
     once(event: FreeswitchCallbackType, cb: FreeswitchCallbackCommand) {
         if (!this.callbacks_once[event]) this.callbacks_once[event] = []
+        
         this.callbacks_once[event].push(cb)
     }
     
@@ -244,11 +237,8 @@ abstract class FreeswitchConnectionTCP  {
             app: app,
             arg: arg
         })
-        const reply: string = await new Promise((resolve) => {
-            this.once(FreeswitchCallbackType.CommandReply, (reply: string) => {
-                resolve(reply)
-            })
-        })
+
+        const reply: string = await this.wait_reply(FreeswitchCallbackType.CommandReply)
 
         if (reply.startsWith('-ERR')) {
             return {ok: false, reply: reply}
@@ -265,6 +255,14 @@ abstract class FreeswitchConnectionTCP  {
             const cbc = cb as FreeswitchCallbackCommand;
             cbc(data)
         }
+    }
+
+    private wait_reply(kind: FreeswitchCallbackType): Promise<string> {
+        return new Promise((resolve) => {
+            this.once(kind, (reply: string) => {
+                resolve(reply)
+            })
+        })
     }
 }
 
