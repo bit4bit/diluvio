@@ -74,7 +74,7 @@ export class FreeswitchProtocolParser {
             case 'text/event-json':
                 if (body) {
                     const event = JSON.parse(body)
-                    return {kind: 'event', data: event}
+                    return {kind: 'event', data: this.normalize_event(event)}
                 } else {
                     throw new Error('failed to get body for event json')
                 }
@@ -82,7 +82,7 @@ export class FreeswitchProtocolParser {
                 if (body) {
                     const buff = new BufReader(new StringReader(body))
                     const header = await this.read_head(buff)
-                    return {kind: 'event', data: header}
+                    return {kind: 'event', data: this.normalize_event(header)}
                 } else {
                     throw new Error('failed to get body for event plain')
                 }
@@ -119,7 +119,7 @@ export class FreeswitchProtocolParser {
             }
 
             const [key, value] = sline.split(':')
-            head[key.toLowerCase()] = value.trim()
+            head[key] = value
 
             const peek = await buff.peek(1)
             if (peek !== null && peek[0] == 10) {
@@ -157,6 +157,17 @@ export class FreeswitchProtocolParser {
 
         return partials.map(partial => text_decoder.decode(partial))
             .join('')
+    }
+
+    private normalize_event(event: any): any {
+        const new_event: any = {}
+
+        console.log(event)
+        for(const [key, value] of Object.entries(event)) {
+            new_event[key.toLowerCase()] = (value + '').trim()
+        }
+        console.log(new_event)
+        return new_event
     }
 }
 
@@ -281,6 +292,8 @@ abstract class FreeswitchConnectionTCP  {
             })
         })
     }
+
+
 }
 
 export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements FreeswitchOutboundConnectioner {
@@ -312,6 +325,7 @@ export class FreeswitchInboundTCP extends FreeswitchConnectionTCP {
 
     async auth(pass: string) {
         await this.wait_reply(FreeswitchCallbackType.AuthRequest)
+        
         this.sendcmd(`auth ${pass}`)
 
         return await this.wait_reply(FreeswitchCallbackType.CommandReply)

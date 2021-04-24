@@ -20,6 +20,7 @@ client.on(FreeswitchCallbackType.Event, (event: FreeswitchEvent) => {
     console.log(event)
 })
 
+console.log('logging')
 const reply_auth: string = await client.auth(pass)
 if (reply_auth.startsWith('+OK accepted')) {
     await client.event('json', ['ALL'])
