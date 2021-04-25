@@ -53,7 +53,7 @@ execute-app-name: ${opts.app}`]
 }
 
 type FreeswitchCallbackEvent = (event: FreeswitchEvent) => void
-type FreeswitchCallbackCommand = (reply: string) => void
+type FreeswitchCallbackCommand = (reply: string | Head) => void
 type FreeswitchConn = Deno.Reader & Deno.Writer
 
 export enum FreeswitchCallbackType {
@@ -96,7 +96,7 @@ export class FreeswitchProtocolParser {
             case 'api/response':
                 return {kind: 'api', data: body ?? ''}
             case 'command/reply':
-                return {kind: 'command', data: head['reply-text']}
+                return {kind: 'command', data: head}
             case 'auth/request':
                 return {kind: 'auth/request', data: body ?? ''}
             case 'text/disconnect-notice':
@@ -117,7 +117,7 @@ export class FreeswitchProtocolParser {
             }
             const { line, more } = result
             if (more)
-                throw new Error('not handle when have more on line')
+                continue
 
             const sline: string = text_decoder.decode(line)
 
@@ -126,6 +126,9 @@ export class FreeswitchProtocolParser {
             }
 
             const [key, value] = sline.split(':')
+            if (value === undefined)
+                continue
+            
             head[key.toLowerCase()] = value.trim()
 
             const peek = await buff.peek(1)
@@ -234,7 +237,7 @@ abstract class FreeswitchConnectionTCP  {
                 }
                 break
             case 'command':
-                this.run_callbacks_once_for(FreeswitchCallbackType.CommandReply, pdu.data as string)
+                this.run_callbacks_once_for(FreeswitchCallbackType.CommandReply, pdu.data)
                 break
             case 'api':
                 this.run_callbacks_once_for(FreeswitchCallbackType.ApiResponse, pdu.data as string)
@@ -282,7 +285,7 @@ abstract class FreeswitchConnectionTCP  {
         }
     }
 
-    private run_callbacks_once_for(event: FreeswitchCallbackType, data: string): void {
+    private run_callbacks_once_for(event: FreeswitchCallbackType, data: string | Head): void {
         if (!this.callbacks_once[event])
             return
         
@@ -297,8 +300,19 @@ abstract class FreeswitchConnectionTCP  {
 
     protected wait_reply(kind: FreeswitchCallbackType): Promise<string> {
         return new Promise((resolve) => {
-            this.once(kind, (reply: string) => {
-                resolve(reply)
+            this.once(kind, (reply: string | Head) => {
+                if (typeof reply == 'object')
+                    resolve(reply['reply-text'])
+                else
+                    resolve(reply)
+            })
+        })
+    }
+
+    protected wait_reply_data(kind: FreeswitchCallbackType): Promise<Head> {
+        return new Promise((resolve) => {
+            this.once(kind, (reply: string | Head) => {
+                resolve(reply as Head)
             })
         })
     }
@@ -319,9 +333,22 @@ export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements Fr
             }
         })
     }
+
+    on_event(cb: FreeswitchEventCallback): void {
+        this.on(FreeswitchCallbackType.Event, (event: FreeswitchEvent) => {
+            cb(event)
+        })
+    }
+
     protected async before_process() {
         this.ack()
-        this.sendcmd('event text ALL')
+        this.iterate()
+        
+        console.log(await this.wait_reply_data(FreeswitchCallbackType.CommandReply))
+        this.sendcmd('myevents')
+        
+        this.iterate()
+        console.log(await this.wait_reply(FreeswitchCallbackType.CommandReply))
     }
 
     async ack() {

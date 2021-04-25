@@ -10,6 +10,7 @@ import type { FreeswitchEvent, FreeswitchEventCallback } from './mod.ts'
 class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
     public actions: Array<string> = []
     public hangups_cb: Array<FreeswitchEventCallback> = []
+    public events_cb: Array<FreeswitchEventCallback> = []
     
     async execute(cmd: string) {
         this.actions.push(`execute: ${cmd}`)
@@ -28,10 +29,13 @@ class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
         }
     }
     
-    async on_hangup(cb: FreeswitchEventCallback) {
+    on_hangup(cb: FreeswitchEventCallback) {
         this.hangups_cb.push(cb)
     }
 
+    on_event(cb: FreeswitchEventCallback) {
+        this.events_cb.push(cb)
+    }
 }
 
 class DialplanFetchEchoFake implements DialplanFetcher {

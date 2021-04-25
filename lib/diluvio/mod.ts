@@ -11,6 +11,7 @@ export interface FreeswitchOutboundConnectioner {
     
     hangup(reason: string): Promise<void>
     on_hangup(cb: FreeswitchEventCallback): void
+    on_event(cb: FreeswitchEventCallback): void
     
 }
 
@@ -44,15 +45,19 @@ class DiluvioConnection {
     private publish: Publisher
 
     private hangup_destination?: string
-
+    private event_destination?: string
+    
     constructor(fsconn: FreeswitchOutboundConnectioner, dialplanFetcher: DialplanFetcher, publish: Publisher) {
         this.fsconn = fsconn
         this.dialplan = dialplanFetcher
         this.publish = publish
 
         //handlers for freeswitch events
+        this.fsconn.on_event((event) => {
+            this.publish.event(this.event_destination ?? '', event)
+        })
         this.fsconn.on_hangup((event) => {
-            this.publish.event(this.hangup_destination || 'http://localhost', event)
+            this.publish.event(this.hangup_destination ?? '', event)
         })
     }
     
@@ -99,7 +104,10 @@ class DiluvioConnection {
         switch(param.parameter) {
             case 'on_hangup':
                 this.hangup_destination = param.value
-                        break
+                break
+            case 'on_event':
+                this.event_destination = param.value
+                break
             default:
                 throw new Error(`parameter unkown handler ${param.parameter}`)
         }
