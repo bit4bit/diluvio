@@ -37,7 +37,8 @@ export class Message {
     static async writeTo(w: Deno.Writer, opts: PduCommand) {
         const pdu = [`sendmsg
 call-command: ${opts.command}
-execute-app-name: ${opts.app}`]
+execute-app-name: ${opts.app}
+event-lock: true`]
         if (opts.arg) {
             pdu.push(`execute-app-arg: ${opts.arg}`)
         }
@@ -280,6 +281,9 @@ abstract class FreeswitchConnectionTCP  {
     }
 
     private run_callbacks_once_for(event: FreeswitchCallbackType, data: string): void {
+        if (!this.callbacks_once[event])
+            return
+        
         const callbacks = Array.from(this.callbacks_once[event] || [])
         this.callbacks_once[event].length = 0
         
@@ -315,6 +319,7 @@ export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements Fr
     }
     protected async before_process() {
         this.ack()
+        this.sendcmd('event text ALL')
     }
 
     async ack() {
@@ -351,8 +356,14 @@ export class DialplanHTTP implements DialplanFetcher {
 }
 
 export class PublishHTTP implements Publisher {
+    private base: string
+    
+    constructor(base: string) {
+        this.base = base
+    }
+    
     async event(destination: string, event: FreeswitchEvent) {
-        await fetch(destination, {
+        await fetch(this.base + destination, {
             method: 'POST',
             cache: 'no-cache',
             headers: {

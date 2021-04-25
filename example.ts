@@ -4,15 +4,17 @@ import { Diluvio } from './lib/diluvio/mod.ts'
 import { serve } from "https://deno.land/std@0.95.0/http/server.ts";
 
 const dialplan = new DialplanHTTP('http://localhost:43001')
-const publish = new PublishHTTP()
+const publish = new PublishHTTP('http://localhost:43001')
 
 //example of dialplan
 const server = serve({port: 43001})
 new Promise(async (resolve) => {
     for await (const req of server) {
         switch(req.url) {
+            case '/event':
+                console.log(req)
             case '/':
-                const plan = [{parameter: 'on_hangup', value: 'http://localhost'},
+                const plan = [{parameter: 'on_hangup', value: '/event'},
                               {action: 'answer'},
                               {action: 'echo'},
                               {action: 'hangup'}]
