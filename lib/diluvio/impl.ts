@@ -4,6 +4,11 @@ import {
     FreeswitchCommandReply,
     FreeswitchApiResponse,
     FreeswitchEventCallback,
+    DialplanFetcher,
+    DialplanActioner,
+    DialplanActionerParameter,
+    DialplanActionerAction,
+    Publisher
 } from './mod.ts'
 
 import {
@@ -328,4 +333,33 @@ export class FreeswitchInboundTCP extends FreeswitchConnectionTCP {
         return await this.wait_reply(FreeswitchCallbackType.CommandReply)
     }
 
+}
+
+
+export class DialplanHTTP implements DialplanFetcher {
+    private base: string
+    
+    constructor(base: string) {
+        this.base = base
+    }
+    
+    async fetch(url: string, data?: any): Promise<Array<DialplanActioner> | []> {
+        const response = await fetch(this.base + url, {body: JSON.stringify(data)})
+        const body = await response.json()
+        return body
+    }
+}
+
+export class PublishHTTP implements Publisher {
+    async event(destination: string, event: FreeswitchEvent) {
+        await fetch(destination, {
+            method: 'POST',
+            cache: 'no-cache',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            redirect: 'follow',
+            body: JSON.stringify(event)
+        })
+    }
 }

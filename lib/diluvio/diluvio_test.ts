@@ -35,7 +35,7 @@ class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
 }
 
 class DialplanFetchEchoFake implements DialplanFetcher {
-    fetch(url: string) {
+    async fetch(url: string) {
         return [
             //configuracion del canal
             {parameter: 'on_hangup', value: 'http://localhost'},
@@ -47,7 +47,7 @@ class DialplanFetchEchoFake implements DialplanFetcher {
 }
 
 class DialplanFetchWithReplyFake implements DialplanFetcher {
-    fetch(url: string) {
+    async fetch(url: string) {
         switch(url) {
             case '/':
                 return [

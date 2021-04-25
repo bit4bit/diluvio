@@ -25,7 +25,7 @@ export type DialplanActionerAction = {action: string, data?: string, dialplan?: 
 export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter
 
 export interface DialplanFetcher {
-    fetch(url: string, data?: any): Array<DialplanActioner> | []
+    fetch(url: string, data?: any): Promise<Array<DialplanActioner> | []>
 }
 
 export interface DiluvioConnectioner {
@@ -57,7 +57,7 @@ class DiluvioConnection {
     }
     
     async process() {
-        const dialplan = this.dialplan.fetch('/')
+        const dialplan = await this.dialplan.fetch('/')
         await this.run_dialplan(dialplan)
     }
 
@@ -88,7 +88,7 @@ class DiluvioConnection {
 
         // use new dialplan if asked
         if (plan.dialplan) {
-            const reply_dialplan = this.dialplan.fetch(plan.dialplan, {reply: reply})
+            const reply_dialplan = await this.dialplan.fetch(plan.dialplan, {reply: reply})
             await this.run_dialplan(reply_dialplan)
         }
 
