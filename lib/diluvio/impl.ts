@@ -26,6 +26,7 @@ export interface PduCommand{
     command: string
     app: string
     arg?: string
+    lock: boolean
 }
 
 interface Pdu {
@@ -37,11 +38,11 @@ export class Message {
     static async writeTo(w: Deno.Writer, opts: PduCommand) {
         const pdu = [`sendmsg
 call-command: ${opts.command}
-execute-app-name: ${opts.app}
-event-lock: true`]
+execute-app-name: ${opts.app}`]
         if (opts.arg) {
             pdu.push(`execute-app-arg: ${opts.arg}`)
         }
+        pdu.push(`event-lock: ${opts.lock}`)
         pdu.push("\n")
         
         const data = text_encoder.encode(pdu.join("\n"))
@@ -264,11 +265,12 @@ abstract class FreeswitchConnectionTCP  {
         await this.conn.write(text_encoder.encode(cmd + "\n\n"))
     }
 
-    protected async sendmsg(cmd: string, app: string, arg?: string) {
+    protected async sendmsg(cmd: string, app: string, arg?: string, lock: boolean = true) {
         Message.writeTo(this.conn, {
             command: cmd,
             app: app,
-            arg: arg
+            arg: arg,
+            lock: lock
         })
 
         const reply: string = await this.wait_reply(FreeswitchCallbackType.CommandReply)

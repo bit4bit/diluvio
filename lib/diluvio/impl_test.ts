@@ -67,10 +67,11 @@ class FreeswitchOutboundServerFake {
 Deno.test('sendmsg without arg', async () => {
     const out = new StringWriter()
     
-    await Message.writeTo(out, {command: 'execute', app: 'hangup'})
+    await Message.writeTo(out, {command: 'execute', app: 'hangup', lock: false})
     assertEquals(out.toString(), `sendmsg
 call-command: execute
 execute-app-name: hangup
+event-lock: false
 
 `)
 })
@@ -78,11 +79,12 @@ execute-app-name: hangup
 Deno.test('sendmsg with arg', async () => {
     const out = new StringWriter()
     
-    await Message.writeTo(out, {command: 'execute', app: 'playback', arg: '/tmp/test.ogg'})
+    await Message.writeTo(out, {command: 'execute', app: 'playback', arg: '/tmp/test.ogg', lock: true})
     assertEquals(out.toString(), `sendmsg
 call-command: execute
 execute-app-name: playback
 execute-app-arg: /tmp/test.ogg
+event-lock: true
 
 `)
 })
