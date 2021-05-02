@@ -72,37 +72,38 @@ export class FreeswitchProtocolParser {
     }
 
     async read(): Promise<Pdu> {
-        const head: Head = await this.read_head(this.reader)
-        const body: string | null = await this.read_body(head)
+        while(true) {
+            const head: Head = await this.read_head(this.reader)
+            const body: string | null = await this.read_body(head)
 
-        const content_type = head['content-type']
+            const content_type = head['content-type']
 
-        switch(content_type) {
-            case 'text/event-json':
-                if (body) {
+            switch(content_type) {
+                case 'text/event-json':
+                    if (body === null)
+                        throw new Error('failed to get body for event json')
+                    
                     const event = JSON.parse(body)
                     return {kind: 'event', data: this.normalize_event(event)}
-                } else {
-                    throw new Error('failed to get body for event json')
-                }
-            case 'text/event-plain':
-                if (body) {
+                case 'text/event-plain':
+                    if (body === null)
+                        throw new Error('failed to get body for event json')
+
                     const buff = new BufReader(new StringReader(body))
                     const header = await this.read_head(buff)
                     return {kind: 'event', data: this.normalize_event(header)}
-                } else {
-                    throw new Error('failed to get body for event plain')
-                }
-            case 'api/response':
-                return {kind: 'api', data: body ?? ''}
-            case 'command/reply':
-                return {kind: 'command', data: head}
-            case 'auth/request':
-                return {kind: 'auth/request', data: body ?? ''}
-            case 'text/disconnect-notice':
-                return {kind: 'disconnect', data: body ?? ''}
-            default:
-                return {kind: 'unknown', data: ''}
+                case 'api/response':
+                    return {kind: 'api', data: body ?? ''}
+                case 'command/reply':
+                    return {kind: 'command', data: head}
+                case 'auth/request':
+                    return {kind: 'auth/request', data: body ?? ''}
+                case 'text/disconnect-notice':
+                    return {kind: 'disconnect', data: body ?? ''}
+                default:
+                        console.warn('protocol parser: unknown content_type')
+                        continue
+            }
         }
     }
 
@@ -248,8 +249,6 @@ abstract class FreeswitchConnectionTCP  {
             case 'disconnect':
                 this.run_callbacks_once_for(FreeswitchCallbackType.Disconnect, pdu.data as string)
                 break
-            case 'unknown':
-                break
             default:
                 throw new Error('not know how handle pdu')
         }
@@ -321,7 +320,7 @@ abstract class FreeswitchConnectionTCP  {
 }
 
 export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements FreeswitchOutboundConnectioner {
-
+    
     async hangup(reason: string): Promise<void> {
         await this.sendmsg('execute', 'hangup', reason)
     }
@@ -341,14 +340,15 @@ export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements Fr
     }
 
     protected async before_process() {
-        this.ack()
+        await this.ack()
         this.iterate()
-        
-        console.log(await this.wait_reply_data(FreeswitchCallbackType.CommandReply))
-        this.sendcmd('myevents')
+
+        // channel data it's send to customer
+        await this.wait_reply_data(FreeswitchCallbackType.CommandReply)
+        await this.sendcmd('myevents')
         
         this.iterate()
-        console.log(await this.wait_reply(FreeswitchCallbackType.CommandReply))
+        await this.wait_reply(FreeswitchCallbackType.CommandReply)
     }
 
     async ack() {

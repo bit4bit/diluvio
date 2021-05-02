@@ -11,7 +11,7 @@ const publish = new PublishHTTP('http://localhost:43001')
 const server = serve({port: 43001})
 new Promise(async (resolve) => {
     for await (const req of server) {
-
+        console.log(req.url)
         switch(req.url) {
             case '/event':
                 const body = await Deno.readAll(req.body)
