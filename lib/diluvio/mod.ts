@@ -26,6 +26,11 @@ export type DialplanActionerApi = {api: string, arg?: string, reply?: string}
 export type DialplanActionerAction = {action: string, data?: string, dialplan?: string, reply?: string}
 export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter | DialplanActionerApi
 
+
+export class DialplanStop extends Error {
+}
+
+
 export interface DialplanFetcher {
     fetch(url: string, data?: any): Promise<Array<DialplanActioner> | []>
 }
@@ -94,7 +99,8 @@ class DiluvioConnection {
 
         // user wants result of execution command
         if (plan.reply) {
-            await this.dialplan.fetch(plan.reply, reply)
+            if (await this.try_new_dialplan(plan.reply, reply) == false)
+                return false
         }
         
         return true
@@ -113,13 +119,14 @@ class DiluvioConnection {
 
         // ask for reply
         if (plan.reply) {
-            await this.dialplan.fetch(plan.reply, reply)
+            if (await this.try_new_dialplan(plan.reply, reply) == false)
+                return false
         }
         
         // use new dialplan if asked
         if (plan.dialplan) {
-            const reply_dialplan = await this.dialplan.fetch(plan.dialplan, reply)
-            await this.run_dialplan(reply_dialplan)
+            if (await this.try_new_dialplan(plan.dialplan, reply) == false)
+                return false
         }
 
         return true
@@ -135,6 +142,22 @@ class DiluvioConnection {
                 break
             default:
                 throw new Error(`parameter unkown handler ${param.parameter}`)
+        }
+    }
+
+    private async try_new_dialplan(url: string, data?: any) {
+        try {
+            const new_dialplan = await this.dialplan.fetch(url, data)
+            if (new_dialplan.length > 0) {
+                await this.run_dialplan(new_dialplan)
+                return false
+            }
+            
+            return true
+        } catch(error) {
+            if (error instanceof DialplanStop)
+                return false
+            throw error
         }
     }
 }

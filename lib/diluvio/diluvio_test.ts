@@ -4,7 +4,7 @@ import {
     assertThrows
 } from 'https://deno.land/std@0.88.0/testing/asserts.ts'
 
-import { Diluvio, DialplanFetcher, Publisher, FreeswitchOutboundConnectioner } from './mod.ts'
+import { Diluvio, DialplanStop, DialplanFetcher, Publisher, FreeswitchOutboundConnectioner } from './mod.ts'
 import type { FreeswitchEvent, FreeswitchEventCallback } from './mod.ts'
 
 class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
@@ -101,10 +101,50 @@ class DialplanFetchExecuteWithReply implements DialplanFetcher {
             case '/':
                 return [
                     {action: 'answer', reply: '/answer-reply'},
+                    {action: 'echo'}
                 ]
             case '/answer-reply':
                 this.actions.push(data)
                 return []
+            default:
+                return []
+        }
+    }
+}
+
+class DialplanFetchExecuteWithReplyNewDialplan implements DialplanFetcher {
+    public actions: Array<string> = []
+    
+    async fetch(url: string, data: any) {
+        switch(url) {
+            case '/':
+                return [
+                    {action: 'answer', reply: '/answer-reply'},
+                ]
+            case '/answer-reply':
+                this.actions.push(data)
+                
+                return [
+                    {action: 'echo'}
+                ]
+            default:
+                return []
+        }
+    }
+}
+
+class DialplanFetchExecuteWithStop implements DialplanFetcher {
+    public actions: Array<string> = []
+    
+    async fetch(url: string, data: any) {
+        switch(url) {
+            case '/':
+                return [
+                    {action: 'answer', reply: '/answer-stop'},
+                    {action: 'echo'}
+                ]
+            case '/answer-stop':
+                throw new DialplanStop()
             default:
                 return []
         }
@@ -157,9 +197,38 @@ Deno.test('iteration 4 outbound', async () => {
     assertEquals(dialplanFetch.actions, [999])
 })
 
-Deno.test('iteration 5 outbound', async () => {
+Deno.test('dialplan execute with reply and continue dialplan', async () => {
     const fsconn = new FreeswitchConnectionFake()
     const dialplanFetch = new DialplanFetchExecuteWithReply()
+    const publish = new PublishFake()
+
+    fsconn.execute_will_return['answer'] = 999
+    
+    const diluvio = new Diluvio(dialplanFetch, publish)
+    await diluvio.connect(fsconn).process()
+
+    assertEquals(fsconn.actions, ['execute: answer', 'execute: echo'])
+    assertEquals(dialplanFetch.actions, [999])
+})
+
+Deno.test('dialplan reply set a new dialplan outbound', async () => {
+    const fsconn = new FreeswitchConnectionFake()
+    const dialplanFetch = new DialplanFetchExecuteWithReplyNewDialplan()
+    const publish = new PublishFake()
+
+    fsconn.execute_will_return['answer'] = 'OK'
+    
+    const diluvio = new Diluvio(dialplanFetch, publish)
+    await diluvio.connect(fsconn).process()
+
+    assertEquals(fsconn.actions, ['execute: answer', 'execute: echo'])
+    assertEquals(dialplanFetch.actions, ['OK'])
+})
+
+
+Deno.test('dialplan stop execution outbound', async () => {
+    const fsconn = new FreeswitchConnectionFake()
+    const dialplanFetch = new DialplanFetchExecuteWithStop()
     const publish = new PublishFake()
 
     fsconn.execute_will_return['answer'] = 'OK'
@@ -168,5 +237,6 @@ Deno.test('iteration 5 outbound', async () => {
     await diluvio.connect(fsconn).process()
 
     assertEquals(fsconn.actions, ['execute: answer'])
-    assertEquals(dialplanFetch.actions, ['OK'])
+    assertEquals(dialplanFetch.actions, [])
 })
+
