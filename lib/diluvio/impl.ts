@@ -192,6 +192,7 @@ export class FreeswitchProtocolParser {
 abstract class FreeswitchConnectionTCP  {
     protected conn: FreeswitchConn
     protected reader: BufReader
+    private queue_events: Array<FreeswitchEvent> = []
     private callbacks: {[key: string]: Array<FreeswitchCallbackEvent>}
     private callbacks_once: {[key: string]: Array<FreeswitchCallbackCommand>}
     private alive: boolean = true
@@ -234,7 +235,18 @@ abstract class FreeswitchConnectionTCP  {
         
         this.callbacks_once[event].push(cb)
     }
-    
+
+
+    private iterate_events() {
+        const event = this.queue_events.shift()
+        
+        if (event === undefined) return
+        
+        let callbacks = this.callbacks[FreeswitchCallbackType.Event] || []
+        for(const cb of callbacks) {
+            cb(event)
+        }
+    }
     
     async iterate() {
         const pdu = await this.parser.read()
@@ -258,6 +270,9 @@ abstract class FreeswitchConnectionTCP  {
             default:
                 throw new Error(`not know how handle pdu`)
         }
+
+
+        this.iterate_events()
     }
 
     
@@ -333,12 +348,8 @@ abstract class FreeswitchConnectionTCP  {
     }
 
     protected dispatch_event(data: Head) {
-        let callbacks = this.callbacks[FreeswitchCallbackType.Event] || []
-        for(const cb of callbacks) {
-            cb(data)
-        }
+        this.queue_events.push(data)
     }
-
 }
 
 export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements FreeswitchOutboundConnectioner {
