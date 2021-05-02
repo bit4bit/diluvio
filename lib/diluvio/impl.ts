@@ -204,6 +204,7 @@ abstract class FreeswitchConnectionTCP  {
         return reply.reply
     }
 
+    // TODO(bit4bit) on outbound socket required `async full`
     async api(cmd: string, arg: string) {
         this.sendcmd(`api ${cmd} ${arg}`)
         return await this.wait_reply(FreeswitchCallbackType.ApiResponse)

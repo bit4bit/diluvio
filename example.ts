@@ -11,18 +11,24 @@ const publish = new PublishHTTP('http://localhost:43001')
 const server = serve({port: 43001})
 new Promise(async (resolve) => {
     for await (const req of server) {
+        const body = await Deno.readAll(req.body)
+
         console.log(req.url)
         switch(req.url) {
             case '/event':
-                const body = await Deno.readAll(req.body)
                 //console.log(text_decoder.decode(body))
             case '/':
                 const plan = [{parameter: 'on_hangup', value: '/hangup'},
                               {parameter: 'on_event', value: '/event'},
+                              {api: 'uptime', reply: '/uptime'},
                               {action: 'answer'},
                               {action: 'echo'},
                               {action: 'hangup'}]
                 req.respond({body: JSON.stringify(plan)})
+                break
+            case '/uptime':
+                console.log('uptime:')
+                console.log(text_decoder.decode(body))
                 break
             default:
                 req.respond({body: JSON.stringify([{action: 'hangup'}])})

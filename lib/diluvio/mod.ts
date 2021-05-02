@@ -22,8 +22,9 @@ export type DialplanActionerParameter = {
     value: string
 }
 
-export type DialplanActionerAction = {action: string, data?: string, dialplan?: string}
-export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter
+export type DialplanActionerApi = {api: string, arg?: string, reply?: string}
+export type DialplanActionerAction = {action: string, data?: string, dialplan?: string, reply?: string}
+export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter | DialplanActionerApi
 
 export interface DialplanFetcher {
     fetch(url: string, data?: any): Promise<Array<DialplanActioner> | []>
@@ -68,8 +69,14 @@ class DiluvioConnection {
 
     private async run_dialplan(dialplan: Array<DialplanActioner>): Promise<void> {
         for(const item of dialplan) {
+            
             // https://www.typescriptlang.org/docs/handbook/advanced-types.html
-            if("action" in item) {
+            if ("api" in item) {
+                if (await this.execute_plan_api(item) == false) {
+                    return
+                }
+            }
+            else if("action" in item) {
                 if (await this.execute_plan_action(item) == false) {
                     return
                 }
@@ -80,6 +87,19 @@ class DiluvioConnection {
         }
     }
 
+    private async execute_plan_api(plan: DialplanActionerApi): Promise<boolean> {
+        let reply: FreeswitchCommandReply | null = null
+
+        reply = await this.fsconn.api(plan.api, plan.arg ?? '')
+
+        // user wants result of execution command
+        if (plan.reply) {
+            await this.dialplan.fetch(plan.reply, reply)
+        }
+        
+        return true
+    }
+    
     private async execute_plan_action(plan: DialplanActionerAction): Promise<boolean> {
         let reply: FreeswitchCommandReply | null = null
 
@@ -90,7 +110,7 @@ class DiluvioConnection {
             default:
                     reply = await this.fsconn.execute(plan.action, plan.data ?? '')
         }
-
+        
         // use new dialplan if asked
         if (plan.dialplan) {
             const reply_dialplan = await this.dialplan.fetch(plan.dialplan, {reply: reply})

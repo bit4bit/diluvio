@@ -11,15 +11,18 @@ class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
     public actions: Array<string> = []
     public hangups_cb: Array<FreeswitchEventCallback> = []
     public events_cb: Array<FreeswitchEventCallback> = []
+
+    public execute_will_return: {[key: string]: any} = []
+    public api_will_return: {[key: string]: any} = []
     
     async execute(cmd: string) {
         this.actions.push(`execute: ${cmd}`)
-        return null
+        return this.execute_will_return[cmd] ?? null
     }
     
     async api(cmd: string, arg: string) {
         this.actions.push(`api: ${cmd} ${arg}`)
-        return null
+        return this.api_will_return[cmd] ?? null
     }
 
     async hangup(reason: string) {
@@ -50,7 +53,7 @@ class DialplanFetchEchoFake implements DialplanFetcher {
     }
 }
 
-class DialplanFetchWithReplyFake implements DialplanFetcher {
+class DialplanFetchWithNewDialplanFake implements DialplanFetcher {
     async fetch(url: string) {
         switch(url) {
             case '/':
@@ -71,6 +74,24 @@ class DialplanFetchWithReplyFake implements DialplanFetcher {
     }
 }
 
+class DialplanFetchWithReply implements DialplanFetcher {
+    public actions: Array<string> = []
+    
+    async fetch(url: string, data: any) {
+        switch(url) {
+            case '/':
+                return [
+                    {action: 'answer'},
+                    {api: 'uptime', reply: 'http://localhost/uptime-reply'}
+                ]
+            case 'http://localhost/uptime-reply':
+                this.actions.push(data)
+                return []
+            default:
+                return []
+        }
+    }
+}
 
 class PublishFake implements Publisher {
     public actions: Array<string> = []
@@ -95,11 +116,25 @@ Deno.test('iteration 1 outbound', async () => {
 
 Deno.test('iteration 3 outbound', async () => {
     const fsconn = new FreeswitchConnectionFake()
-    const dialplanFetch = new DialplanFetchWithReplyFake()
+    const dialplanFetch = new DialplanFetchWithNewDialplanFake()
     const publish = new PublishFake()
     
     const diluvio = new Diluvio(dialplanFetch, publish)
     await diluvio.connect(fsconn).process()
 
     assertEquals(fsconn.actions, ['execute: answer', 'hangup'])
+})
+
+Deno.test('iteration 4 outbound', async () => {
+    const fsconn = new FreeswitchConnectionFake()
+    const dialplanFetch = new DialplanFetchWithReply()
+    const publish = new PublishFake()
+
+    fsconn.api_will_return['uptime'] = 999
+    
+    const diluvio = new Diluvio(dialplanFetch, publish)
+    await diluvio.connect(fsconn).process()
+
+    assertEquals(fsconn.actions, ['execute: answer', 'api: uptime '])
+    assertEquals(dialplanFetch.actions, [999])
 })
