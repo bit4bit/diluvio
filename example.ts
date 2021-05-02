@@ -20,8 +20,8 @@ new Promise(async (resolve) => {
             case '/':
                 const plan = [{parameter: 'on_hangup', value: '/hangup'},
                               {parameter: 'on_event', value: '/event'},
-                              {api: 'uptime', reply: '/uptime'},
                               {action: 'answer'},
+                              {api: 'uptime', reply: '/uptime'},
                               {action: 'echo'},
                               {action: 'hangup'}]
                 req.respond({body: JSON.stringify(plan)})
