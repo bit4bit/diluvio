@@ -18,6 +18,9 @@ new Promise(async (resolve) => {
             case '/event':
                 const event: any = JSON.parse(text_decoder.decode(body))
                 console.log(event['event-name'])
+                if (event['event-name'] == 'CHANNEL_DATA') {
+                    console.log(event)
+                }
             case '/':
                 const plan = [{parameter: 'on_hangup', value: '/hangup'},
                               {parameter: 'on_event', value: '/event'},

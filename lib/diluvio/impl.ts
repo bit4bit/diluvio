@@ -377,11 +377,14 @@ export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements Fr
         this.iterate()
 
         // channel data it's send to customer
-        await this.wait_reply_data(FreeswitchCallbackType.CommandReply)
+        const channel_data = await this.wait_reply_data(FreeswitchCallbackType.CommandReply)
         await this.sendcmd('myevents')
         
         this.iterate()
         await this.wait_reply(FreeswitchCallbackType.CommandReply)
+
+        // enqueue channel data as event
+        this.dispatch_event(channel_data)
     }
 
     async ack() {
