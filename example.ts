@@ -16,7 +16,8 @@ new Promise(async (resolve) => {
         console.log(req.url)
         switch(req.url) {
             case '/event':
-                //console.log(text_decoder.decode(body))
+                const event: any = JSON.parse(text_decoder.decode(body))
+                console.log(event['event-name'])
             case '/':
                 const plan = [{parameter: 'on_hangup', value: '/hangup'},
                               {parameter: 'on_event', value: '/event'},
@@ -41,13 +42,16 @@ new Promise(async (resolve) => {
 //run main logic
 const listener = Deno.listen({port: 43000})
 console.log('listening on 0.0.0.0:43000')
+
 for await (const conn of listener) {
     new Promise(async (resolve) => {
         const diluvio = new Diluvio(dialplan, publish)
         const fsconn = new FreeswitchOutboundTCP(conn)        
-        fsconn.process()
-        await diluvio.connect(fsconn).process()
+        const diluvio_conn = diluvio.connect(fsconn)
         
+        fsconn.process()
+        await diluvio_conn.process()
+
         console.log('connection done')
         resolve(true)
     })

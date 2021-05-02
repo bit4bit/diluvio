@@ -64,6 +64,13 @@ export enum FreeswitchCallbackType {
     Disconnect = 'disconnect'
 }
 
+
+export class FreeswitchConnectionError extends Error {
+}
+
+export class FreeswitchConnectionClosed extends Error {
+}
+
 export class FreeswitchProtocolParser {
     private reader: BufReader
 
@@ -114,7 +121,8 @@ export class FreeswitchProtocolParser {
             const result = await buff.readLine()
 
             if (result === null) {
-                throw new Error('not known how to handle result === null')
+                throw new FreeswitchConnectionError()
+                
             }
             const { line, more } = result
             if (more)
@@ -230,13 +238,9 @@ abstract class FreeswitchConnectionTCP  {
     
     async iterate() {
         const pdu = await this.parser.read()
-
         switch(pdu.kind) {
             case 'event':
-                let callbacks = this.callbacks[FreeswitchCallbackType.Event] || []
-                for(const cb of callbacks) {
-                    cb(pdu.data as Head)
-                }
+                this.dispatch_event(pdu.data as Head)
                 break
             case 'command':
                 this.run_callbacks_once_for(FreeswitchCallbackType.CommandReply, pdu.data)
@@ -249,9 +253,10 @@ abstract class FreeswitchConnectionTCP  {
                 break
             case 'disconnect':
                 this.run_callbacks_once_for(FreeswitchCallbackType.Disconnect, pdu.data as string)
+                throw new FreeswitchConnectionClosed()
                 break
             default:
-                throw new Error('not know how handle pdu')
+                throw new Error(`not know how handle pdu`)
         }
     }
 
@@ -260,7 +265,17 @@ abstract class FreeswitchConnectionTCP  {
         await this.before_process()
         
         while(true) {
-            await this.iterate()
+            try {
+                await this.iterate()
+            } catch (error) {
+                if (error instanceof FreeswitchConnectionError)
+                    return
+
+                if (error instanceof FreeswitchConnectionClosed)
+                    return
+                
+                throw error
+            }
         }
     }
 
@@ -317,6 +332,12 @@ abstract class FreeswitchConnectionTCP  {
         })
     }
 
+    protected dispatch_event(data: Head) {
+        let callbacks = this.callbacks[FreeswitchCallbackType.Event] || []
+        for(const cb of callbacks) {
+            cb(data)
+        }
+    }
 
 }
 
