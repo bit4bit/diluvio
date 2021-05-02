@@ -93,6 +93,24 @@ class DialplanFetchWithReply implements DialplanFetcher {
     }
 }
 
+class DialplanFetchExecuteWithReply implements DialplanFetcher {
+    public actions: Array<string> = []
+    
+    async fetch(url: string, data: any) {
+        switch(url) {
+            case '/':
+                return [
+                    {action: 'answer', reply: '/answer-reply'},
+                ]
+            case '/answer-reply':
+                this.actions.push(data)
+                return []
+            default:
+                return []
+        }
+    }
+}
+
 class PublishFake implements Publisher {
     public actions: Array<string> = []
         
@@ -137,4 +155,18 @@ Deno.test('iteration 4 outbound', async () => {
 
     assertEquals(fsconn.actions, ['execute: answer', 'api: uptime '])
     assertEquals(dialplanFetch.actions, [999])
+})
+
+Deno.test('iteration 5 outbound', async () => {
+    const fsconn = new FreeswitchConnectionFake()
+    const dialplanFetch = new DialplanFetchExecuteWithReply()
+    const publish = new PublishFake()
+
+    fsconn.execute_will_return['answer'] = 'OK'
+    
+    const diluvio = new Diluvio(dialplanFetch, publish)
+    await diluvio.connect(fsconn).process()
+
+    assertEquals(fsconn.actions, ['execute: answer'])
+    assertEquals(dialplanFetch.actions, ['OK'])
 })

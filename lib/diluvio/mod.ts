@@ -110,10 +110,15 @@ class DiluvioConnection {
             default:
                     reply = await this.fsconn.execute(plan.action, plan.data ?? '')
         }
+
+        // ask for reply
+        if (plan.reply) {
+            await this.dialplan.fetch(plan.reply, reply)
+        }
         
         // use new dialplan if asked
         if (plan.dialplan) {
-            const reply_dialplan = await this.dialplan.fetch(plan.dialplan, {reply: reply})
+            const reply_dialplan = await this.dialplan.fetch(plan.dialplan, reply)
             await this.run_dialplan(reply_dialplan)
         }
 
