@@ -189,6 +189,9 @@ export class FreeswitchProtocolParser {
     }
 }
 
+/**
+ * Base implementation freeswitch event socket
+ */
 abstract class FreeswitchConnectionTCP  {
     protected conn: FreeswitchConn
     protected reader: BufReader
@@ -352,6 +355,9 @@ abstract class FreeswitchConnectionTCP  {
     }
 }
 
+/**
+ * See https://freeswitch.org/confluence/display/FREESWITCH/Event+Socket+Outbound
+ */
 export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements FreeswitchOutboundConnectioner {
     
     async hangup(reason: string): Promise<void> {
@@ -373,6 +379,7 @@ export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements Fr
     }
 
     protected async before_process() {
+        // outbound socket need ack connection from freeswitch
         await this.ack()
         this.iterate()
 
@@ -392,6 +399,10 @@ export class FreeswitchOutboundTCP extends FreeswitchConnectionTCP implements Fr
     }
 }
 
+
+/**
+ * See https://freeswitch.org/confluence/display/FREESWITCH/mod_event_socket
+ */
 export class FreeswitchInboundTCP extends FreeswitchConnectionTCP {
     protected async before_process() {
     }
@@ -406,34 +417,53 @@ export class FreeswitchInboundTCP extends FreeswitchConnectionTCP {
 }
 
 
+/**
+ *Implementation using HTTP for get dialplan
+ */
 export class DialplanHTTP implements DialplanFetcher {
     private base: string
+    private headers: any
     
-    constructor(base: string) {
+    constructor(base: string, headers: any = {}) {
         this.base = base
+        this.headers = headers
     }
     
     async fetch(url: string, data?: any): Promise<Array<DialplanActioner> | []> {
-        const response = await fetch(this.base + url, {body: JSON.stringify(data)})
+        let headers = { ...this.headers }
+        Object.assign(headers, this.headers, {'accept': 'application/json'})
+
+        const response = await fetch(this.base + url, {
+            method: 'GET',
+            cache: 'no-cache',
+            headers: headers,
+            body: JSON.stringify(data)
+        })
         const body = await response.json()
         return body
     }
 }
 
+/**
+ * Implementation using HTTP for publishing events
+ */
 export class PublishHTTP implements Publisher {
     private base: string
+    private headers: any
     
-    constructor(base: string) {
+    constructor(base: string, headers: any = {}) {
         this.base = base
+        this.headers = headers
     }
     
     async event(destination: string, event: FreeswitchEvent) {
+        let headers = { ...this.headers }
+        Object.assign(headers, this.headers, {'content-type': 'application/json'})
+        
         await fetch(this.base + destination, {
             method: 'POST',
             cache: 'no-cache',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: headers,
             redirect: 'follow',
             body: JSON.stringify(event)
         })
