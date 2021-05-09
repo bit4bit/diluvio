@@ -14,6 +14,7 @@ class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
 
     public execute_will_return: {[key: string]: any} = []
     public api_will_return: {[key: string]: any} = []
+    public set_variable_will_return: {[key: string]: any} = []
     
     async execute(cmd: string) {
         this.actions.push(`execute: ${cmd}`)
@@ -30,6 +31,10 @@ class FreeswitchConnectionFake implements FreeswitchOutboundConnectioner {
         for(const cb of this.hangups_cb) {
             cb({})
         }
+    }
+
+    async set_variable(name: string, value: string) {
+        this.actions.push(`set ${name}=${value}`)
     }
     
     on_hangup(cb: FreeswitchEventCallback) {
@@ -151,6 +156,21 @@ class DialplanFetchExecuteWithStop implements DialplanFetcher {
     }
 }
 
+class DialplanFetchSetVariable implements DialplanFetcher {
+    public actions: Array<string> = []
+    
+    async fetch(url: string, data: any) {
+        switch(url) {
+            case '/':
+                return [
+                    {set: 'test', value: 'testo'}
+                ]
+            default:
+                return []
+        }
+    }
+}
+
 class PublishFake implements Publisher {
     public actions: Array<string> = []
         
@@ -237,6 +257,20 @@ Deno.test('dialplan stop execution outbound', async () => {
     await diluvio.connect(fsconn).process()
 
     assertEquals(fsconn.actions, ['execute: answer'])
+    assertEquals(dialplanFetch.actions, [])
+})
+
+Deno.test('dialplan set variable', async () => {
+    const fsconn = new FreeswitchConnectionFake()
+    const dialplanFetch = new DialplanFetchSetVariable()
+    const publish = new PublishFake()
+
+    fsconn.set_variable_will_return['test'] = 'OK'
+    
+    const diluvio = new Diluvio(dialplanFetch, publish)
+    await diluvio.connect(fsconn).process()
+
+    assertEquals(fsconn.actions, ['set test=testo'])
     assertEquals(dialplanFetch.actions, [])
 })
 

@@ -8,7 +8,7 @@ export type FreeswitchApiResponse = string | null
 export interface FreeswitchOutboundConnectioner {
     execute(cmd: string, arg: string): Promise<FreeswitchCommandReply>
     api(cmd: string, arg: string): Promise<FreeswitchApiResponse>
-    
+    set_variable(name: string, value: string): Promise<void>
     hangup(reason: string): Promise<void>
     on_hangup(cb: FreeswitchEventCallback): void
     on_event(cb: FreeswitchEventCallback): void
@@ -22,9 +22,10 @@ export type DialplanActionerParameter = {
     value: string
 }
 
+export type DialplanActionerSet = {set: string, value: string}
 export type DialplanActionerApi = {api: string, arg?: string, reply?: string}
 export type DialplanActionerAction = {action: string, data?: string, dialplan?: string, reply?: string}
-export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter | DialplanActionerApi
+export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter | DialplanActionerApi | DialplanActionerSet
 
 
 export class DialplanStop extends Error {
@@ -81,6 +82,10 @@ class DiluvioConnection {
                     return
                 }
             }
+            else if("set" in item) {
+                await this.execute_plan_set_variable(item)
+                continue
+            }
             else if("action" in item) {
                 if (await this.execute_plan_action(item) == false) {
                     return
@@ -92,6 +97,10 @@ class DiluvioConnection {
         }
     }
 
+    private async execute_plan_set_variable(variable: DialplanActionerSet) {
+        await this.fsconn.set_variable(variable.set, variable.value)
+    }
+    
     private async execute_plan_api(plan: DialplanActionerApi): Promise<boolean> {
         let reply: FreeswitchCommandReply | null = null
 

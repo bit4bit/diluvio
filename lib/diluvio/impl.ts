@@ -222,6 +222,10 @@ abstract class FreeswitchConnectionTCP  {
         return await this.wait_reply(FreeswitchCallbackType.ApiResponse)
     }
 
+    async set_variable(name: string, value: string) {
+        await this.sendmsg('execute', 'set', `${name}=${value}`)
+    }
+    
     async event(kind: string, events: Array<string>): Promise<string> {
         this.sendcmd(`event ${kind} ${events.join(",")}`)
         return await this.wait_reply(FreeswitchCallbackType.CommandReply)
