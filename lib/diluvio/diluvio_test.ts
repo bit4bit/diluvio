@@ -178,12 +178,12 @@ class DialplanFetchActionWithExecute implements DialplanFetcher {
         switch(url) {
             case '/':
                 return [
-                    {action: 'echo', execute: '/execute'},
+                    {action: 'echo', execute: '/execute', execute_data: 'superdata'},
                 ]
             case '/execute':
                 this.actions.push(data)
                 return [
-                    {action: 'reply', reply: '/reply'}
+                    {action: 'uptime', reply: '/reply'}
                 ]
             case '/reply':
                 this.actions.push(data)
@@ -304,12 +304,14 @@ Deno.test('dialplan execute with reply and continue dialplan', async () => {
     const dialplanFetch = new DialplanFetchActionWithExecute()
     const publish = new PublishFake()
 
+    fsconn.execute_will_return['uptime'] = 2323
     
     const diluvio = new Diluvio(dialplanFetch, publish)
     await diluvio.connect(fsconn).process()
 
     assertEquals(fsconn.actions, ['execute: echo',
-                                  'execute: reply',
+                                  'execute: uptime',
                                   'hangup'])
+    assertEquals(dialplanFetch.actions, ['superdata', 2323])
 })
 

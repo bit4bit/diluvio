@@ -33,13 +33,14 @@ new Promise(async (resolve) => {
                     {parameter: 'on_event', value: '/event'},
 
                     // run action and notify next dialplan
-                    {action: 'answer', diaplan: '/continue-dialplan'},
+                    {action: 'answer', dialplan: '/continue-dialplan'},
 
                 ]
                 req.respond({body: JSON.stringify(plan)})
                 break
                 // execute after answer done
             case '/continue-dialplan':
+                console.log('continue plan')
                 const continue_plan = [
                     {api: 'uptime', reply: '/uptime'},
                     {action: 'echo'},
@@ -61,7 +62,7 @@ new Promise(async (resolve) => {
 
 //run main logic
 
-const listener = Deno.listen({port: 43000})
+const listener = Deno.listen({port: 44002})
 console.log('listening on 0.0.0.0:43000')
 
 for await (const conn of listener) {

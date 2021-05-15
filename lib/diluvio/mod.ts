@@ -25,7 +25,7 @@ export type DialplanActionerParameter = {
 export type DialplanActionerSet = {set: string, value: string}
 export type DialplanActionerApi = {api: string, arg?: string, reply?: string}
 // TODO(bit4bit) dialplan y reply se pueden unir en un solo tipo
-export type DialplanActionerAction = {action: string, data?: string, dialplan?: string, reply?: string, execute?: string}
+export type DialplanActionerAction = {action: string, data?: string, dialplan?: string, reply?: string, execute?: string, execute_data?: any}
 export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter | DialplanActionerApi | DialplanActionerSet
 export type Dialplan = Array<DialplanActioner>
 
@@ -128,7 +128,7 @@ class DiluvioConnection {
                     let continue_dialplan: Promise<boolean> = new Promise((resolve) => {resolve(true)})
                 
                 if (plan.execute) {
-                    continue_dialplan = this.try_new_dialplan(plan.execute)
+                    continue_dialplan = this.try_new_dialplan(plan.execute, plan.execute_data)
                 }
                 
                 reply = await this.fsconn.execute(plan.action, plan.data ?? '')
