@@ -171,6 +171,31 @@ class DialplanFetchSetVariable implements DialplanFetcher {
     }
 }
 
+class DialplanFetchActionWithExecute implements DialplanFetcher {
+    public actions: Array<string> = []
+    
+    async fetch(url: string, data: any) {
+        switch(url) {
+            case '/':
+                return [
+                    {action: 'echo', execute: '/execute'},
+                ]
+            case '/execute':
+                this.actions.push(data)
+                return [
+                    {action: 'reply', reply: '/reply'}
+                ]
+            case '/reply':
+                this.actions.push(data)
+                return [
+                    {action: 'hangup'}
+                ]
+            default:
+                return []
+        }
+    }
+}
+
 class PublishFake implements Publisher {
     public actions: Array<string> = []
         
@@ -272,5 +297,19 @@ Deno.test('dialplan set variable', async () => {
 
     assertEquals(fsconn.actions, ['set test=testo'])
     assertEquals(dialplanFetch.actions, [])
+})
+
+Deno.test('dialplan execute with reply and continue dialplan', async () => {
+    const fsconn = new FreeswitchConnectionFake()
+    const dialplanFetch = new DialplanFetchActionWithExecute()
+    const publish = new PublishFake()
+
+    
+    const diluvio = new Diluvio(dialplanFetch, publish)
+    await diluvio.connect(fsconn).process()
+
+    assertEquals(fsconn.actions, ['execute: echo',
+                                  'execute: reply',
+                                  'hangup'])
 })
 

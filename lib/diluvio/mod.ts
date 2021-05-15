@@ -24,9 +24,10 @@ export type DialplanActionerParameter = {
 
 export type DialplanActionerSet = {set: string, value: string}
 export type DialplanActionerApi = {api: string, arg?: string, reply?: string}
-export type DialplanActionerAction = {action: string, data?: string, dialplan?: string, reply?: string}
+// TODO(bit4bit) dialplan y reply se pueden unir en un solo tipo
+export type DialplanActionerAction = {action: string, data?: string, dialplan?: string, reply?: string, execute?: string}
 export type DialplanActioner = DialplanActionerAction | DialplanActionerParameter | DialplanActionerApi | DialplanActionerSet
-
+export type Dialplan = Array<DialplanActioner>
 
 export class DialplanStop extends Error {
 }
@@ -118,12 +119,23 @@ class DiluvioConnection {
     private async execute_plan_action(plan: DialplanActionerAction): Promise<boolean> {
         let reply: FreeswitchCommandReply | null = null
 
+        
         switch(plan.action) {
             case 'hangup':
                 await this.fsconn.hangup(plan.data as string ?? 'NORMAL_CLEARING')
                 return false;
             default:
-                    reply = await this.fsconn.execute(plan.action, plan.data ?? '')
+                    let continue_dialplan: Promise<boolean> = new Promise((resolve) => {resolve(true)})
+                
+                if (plan.execute) {
+                    continue_dialplan = this.try_new_dialplan(plan.execute)
+                }
+                
+                reply = await this.fsconn.execute(plan.action, plan.data ?? '')
+
+                if ((await continue_dialplan) == false) {
+                    return false
+                }
         }
 
         // ask for reply

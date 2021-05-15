@@ -438,7 +438,7 @@ export class DialplanHTTP implements DialplanFetcher {
         Object.assign(headers, this.headers, {'accept': 'application/json'})
 
         const response = await fetch(this.base + url, {
-            method: 'GET',
+            method: 'PUT',
             cache: 'no-cache',
             headers: headers,
             body: JSON.stringify(data)
