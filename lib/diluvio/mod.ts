@@ -6,7 +6,7 @@ export type FreeswitchCommandReply = string | null
 export type FreeswitchApiResponse = string | null
 
 export interface FreeswitchOutboundConnectioner {
-    execute(cmd: string, arg: string): Promise<FreeswitchCommandReply>
+    execute(cmd: string, arg: string, lock: boolean): Promise<FreeswitchCommandReply>
     api(cmd: string, arg: string): Promise<FreeswitchApiResponse>
     set_variable(name: string, value: string): Promise<void>
     hangup(reason: string): Promise<void>
@@ -119,21 +119,20 @@ class DiluvioConnection {
     private async execute_plan_action(plan: DialplanActionerAction): Promise<boolean> {
         let reply: FreeswitchCommandReply | null = null
 
-        
         switch(plan.action) {
             case 'hangup':
                 await this.fsconn.hangup(plan.data as string ?? 'NORMAL_CLEARING')
-                return false;
+                return false
             default:
-                    let continue_dialplan: Promise<boolean> = new Promise((resolve) => {resolve(true)})
-                
+                    let continue_dialplan: Promise<boolean> | null = null
                 if (plan.execute) {
                     continue_dialplan = this.try_new_dialplan(plan.execute, plan.execute_data)
+                    reply = await this.fsconn.execute(plan.action, plan.data ?? '', false)
+                } else {
+                    reply = await this.fsconn.execute(plan.action, plan.data ?? '', true)
                 }
-                
-                reply = await this.fsconn.execute(plan.action, plan.data ?? '')
 
-                if ((await continue_dialplan) == false) {
+                if (continue_dialplan !== null && (await continue_dialplan) == false) {
                     return false
                 }
         }

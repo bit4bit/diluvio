@@ -24,6 +24,7 @@ new Promise(async (resolve) => {
                 if (event['event-name'] == 'CHANNEL_DATA') {
                     console.log(event)
                 }
+                break
                 // server query main dialplan
             case '/':
                 const plan = [
@@ -43,17 +44,29 @@ new Promise(async (resolve) => {
                 console.log('continue plan')
                 const continue_plan = [
                     {api: 'uptime', reply: '/uptime'},
-                    {action: 'echo'},
+                    {action: 'echo', execute: '/timeout-echo', execute_data: 1000},
                     {action: 'hangup'}
                 ]
                 req.respond({body: JSON.stringify(continue_plan)})
+                break
                 // get api response
+            case '/timeout-echo':
+                console.log(`timeout echo ${text_decoder.decode(body)}`)
+                const data = JSON.parse(text_decoder.decode(body))
+                setTimeout(() => {
+                    req.respond({body: JSON.stringify([
+                        {action: 'hangup'}
+                    ])})
+                }, data)
+                break
             case '/uptime':
-                console.log('uptime:')
+                console.log('uptime endpoint:')
                 console.log(text_decoder.decode(body))
+                req.respond({body: JSON.stringify([])})
                 break
             default:
                 req.respond({body: JSON.stringify([{action: 'hangup'}])})
+                break
         }
 
     }

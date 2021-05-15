@@ -21,7 +21,7 @@ class LaxmlError extends Error {
 }
 class LaxmlTranslator {
     private app_url: string
-    private handler: (req: ServerRequest) => void
+    private handler: (req: ServerRequest) => Promise<void>
     private response: any
     private actions: Array<string> = []
 
@@ -32,9 +32,9 @@ class LaxmlTranslator {
         this.handler = this.handle_initial_request
     }
     
-    handle(req: ServerRequest) {
+    async handle(req: ServerRequest) {
         try {
-            this.handler(req)
+            await this.handler(req)
         } catch(e) {
             response_json(req, [
                 {action: 'hangup'}
@@ -74,7 +74,7 @@ class LaxmlTranslator {
             throw new LaxmlError('empty actions')
         
         const item: any = this.response[action]
-        
+
         switch(action) {
             case 'Say':
                 this.add_plan(
@@ -83,8 +83,8 @@ class LaxmlTranslator {
                 this.process()
                 break
             case 'Echo':
-                this.add_plan({action: 'echo'})
-                this.process()
+                this.add_plan({action: 'echo', execute: '/timeout', execute_data: parseInt(item["@timeout"] ?? '1000')})
+                this.handler = this.handle_timeout
                 break
             case 'Hangup':
                 this.add_plan({action: 'hangup'})
@@ -92,6 +92,23 @@ class LaxmlTranslator {
         }
     }
 
+    private async handle_timeout(req: ServerRequest) {
+        console.log(`handle_timeout: ${req.url}`)
+
+        if (req.url == '/event')
+            return
+        
+        if (req.url != '/timeout')
+            throw new LaxmlError(`not found timeout endpoint ${req.url}`)
+        const body = text_decoder.decode(await Deno.readAll(req.body))
+        const timeout = parseInt(body)
+        setTimeout(() => {
+            this.handler = this.handle_initial_request
+            this.process()
+            this.send_plan(req)
+        }, timeout)
+    }
+    
     private add_plan(plan: DialplanActioner) {
         this.plan.push(plan)
     }
@@ -104,13 +121,12 @@ class LaxmlTranslator {
 }
 
 async function http_handler(port: number, app_url: string) {
+    // TODO(bit4bit) not handle multiple calls lose context
     const translator = new LaxmlTranslator(app_url)
-    
+
     const server = serve({port: port})
     for await (const req of server) {
-        const body = await Deno.readAll(req.body)
-        
-        translator.handle(req)
+        await translator.handle(req)
     }
 }
 
@@ -123,7 +139,7 @@ async function http_laxml_example(port: number) {
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
  <Say>Connecting you ...</Say>
- <Echo/>
+ <Echo timeout="2000"/>
  <Hangup/>
 </Response>
 `})

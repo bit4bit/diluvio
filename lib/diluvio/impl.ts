@@ -44,7 +44,7 @@ execute-app-name: ${opts.app}`]
         }
         pdu.push(`event-lock: ${opts.lock}`)
         pdu.push("\n")
-        
+
         const data = text_encoder.encode(pdu.join("\n"))
         const n = await w.write(data)
         if (n != data.length)
@@ -211,8 +211,8 @@ abstract class FreeswitchConnectionTCP  {
         this.callbacks_once = {}
     }
 
-    async execute(cmd: string, arg: string): Promise<FreeswitchCommandReply> {
-        const reply = await this.sendmsg('execute', cmd, arg)
+    async execute(cmd: string, arg: string, lock: boolean = true): Promise<FreeswitchCommandReply> {
+        const reply = await this.sendmsg('execute', cmd, arg, lock)
         return reply.reply
     }
 
