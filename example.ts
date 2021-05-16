@@ -44,7 +44,7 @@ new Promise(async (resolve) => {
                 console.log('continue plan')
                 const continue_plan = [
                     {api: 'uptime', reply: '/uptime'},
-                    {action: 'echo', execute: '/timeout-echo', execute_data: 1000},
+                    {action: 'echo', execute: '/timeout-echo', execute_data: 5000},
                     {action: 'hangup'}
                 ]
                 req.respond({body: JSON.stringify(continue_plan)})

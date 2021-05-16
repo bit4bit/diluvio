@@ -29,7 +29,7 @@ class LaxmlTranslator {
     
     constructor(app_url: string) {
         this.app_url = app_url
-        this.handler = this.handle_initial_request
+        this.handler = this.handle_answer
     }
     
     async handle(req: ServerRequest) {
@@ -43,23 +43,59 @@ class LaxmlTranslator {
         }
     }
 
-    private async handle_initial_request(req: ServerRequest) {
+    private async fetch_response(url: string) {
+        const resp = await fetch(url)
+        if (resp.body === null)
+            throw new LaxmlError('invalid laxml body')
+
+        const document: any = xml_parse(await resp.text())
+        if (! ('Response' in document))
+            throw new LaxmlError('not element Response')
+
+        this.response = document.Response
+        this.actions = Object.keys(this.response)
+    }
+
+    private async handle_answer(req: ServerRequest) {
+        const body = await Deno.readAll(req.body)
         switch(req.url) {
             case '/':
-                const resp = await fetch(this.app_url)
-                if (resp.body === null)
-                    throw new LaxmlError('invalid laxml body')
-                
-                const document: any = xml_parse(await resp.text())
-                if (! ('Response' in document))
-                    throw new LaxmlError('not element Response')
+                this.handler = this.handle_initial_request
+                this.add_plan({action: 'answer', dialplan: '/'})
+                this.send_plan(req)
+                break
+            case '/event':
+                const event: any = JSON.parse(text_decoder.decode(body))
+                if (event['event-name'] == 'CHANNEL_DATA') {
+                    console.log(event)
+                    /*this.handler = this.handle_initial_request
 
-                this.response = document.Response
-                this.actions = Object.keys(this.response)
+                    await this.fetch_response(this.app_url)
+                    this.process()
+                    this.send_plan(req)*/
+                }
+                break
+            default:
+                throw new LaxmlError(`not handler for ${req.url}`)
+        }
+    }
+    
+    private async handle_initial_request(req: ServerRequest) {
+
+        switch(req.url) {
+            case '/':
+                await this.fetch_response(this.app_url)
                 this.process()
                 this.send_plan(req)
                 break
             case '/event':
+                const body = await Deno.readAll(req.body)
+                const event: any = JSON.parse(text_decoder.decode(body))
+
+                if (event['event-name'] == 'CHANNEL_EXECUTE_COMPLETE' && event['application'] == 'answer') {
+                    console.log(event)
+
+                }
                 break
             default:
                 throw new LaxmlError(`not handler for ${req.url}`)
@@ -76,6 +112,48 @@ class LaxmlTranslator {
         const item: any = this.response[action]
 
         switch(action) {
+            case 'Gather':
+                const gather_params = {timeout: 5000,
+                                       action: '',
+                                       terminators: '#',
+                                       min: 0, max: 128,
+                                       tries: 3,
+                                       file: 'silence_stream://',
+                                       invalid_file: 'silence_stream://250'}
+                if ('@input' in item) {
+                    if (item['@input'] != 'dtmf') {
+                        throw new LaxmlError('only supported dtmf input')
+                    }
+                }
+
+                if ('@action' in item) {
+                    gather_params.action = item['@action']
+                }
+                
+                if ('@timeout' in item) {
+                    const gather_timeout = parseInt(item['@timeout'])
+                    gather_params.timeout = gather_timeout
+                }
+
+                if ('@numDigits' in item) {
+                    const gather_digits = parseInt(item['@numDigits'])
+                    gather_params.min = gather_digits
+                    gather_params.max = gather_digits
+                }
+                
+                if ('Say' in item) {
+                    gather_params.file = `say:'${item.Say}'`
+                }
+
+                // only dtmf
+                this.add_plan(
+                    {set: 'gather_action', value: gather_params.action},
+                )
+                this.add_plan(
+                    {action: 'play_and_get_digits', data: `${gather_params.min} ${gather_params.max} ${gather_params.tries} ${gather_params.timeout} ${gather_params.terminators} ${gather_params.file} ${gather_params.invalid_file} diluvio_gather \\d+`}
+                )
+                this.handler = this.handle_gather
+                break
             case 'Say':
                 this.add_plan(
                     {action: 'speak', data: `flite|kal|${item}`}
@@ -92,6 +170,30 @@ class LaxmlTranslator {
         }
     }
 
+    private async handle_gather(req: ServerRequest) {
+        const body = await Deno.readAll(req.body)
+        
+        if (req.url == '/event') {
+            const event: any = JSON.parse(text_decoder.decode(body))
+            //console.log(event)
+            if (event['event-name'] == 'CHANNEL_EXECUTE_COMPLETE' && event['application'] == 'play_and_get_digits') {
+                const digits = event['variable_diluvio_gather']
+                const action_url = decodeURI(event['variable_gather_action'])
+
+                if (digits == undefined) {
+                    this.handler = this.handle_initial_request
+                    this.process()
+                    this.send_plan(req)
+                } else {
+                    console.log(`get dtmf digits ${digits} calling ${action_url}`)
+                    this.fetch_response(`${action_url}?digits=${digits}`)
+                    this.process()
+                    this.send_plan(req)
+                }
+            }
+        }
+    }
+    
     private async handle_timeout(req: ServerRequest) {
         console.log(`handle_timeout: ${req.url}`)
 
@@ -146,10 +248,29 @@ async function http_laxml_example(port: number) {
     }
 }
 
+async function http_laxml_example_gather(port: number) {
+    const server = serve({port: port})
+    for await (const req of server) {
+        const body = await Deno.readAll(req.body)
+
+        req.respond({body:`
+<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+ <Gather action="http://localhost:50001" numDigits="5">
+  <Say>press one for technicial support</Say>
+</Gather>
+<Say>Invalid input goodbye</Say>
+</Response>
+`})
+    }
+}
+
+
 // main
 
 // http handler
-http_laxml_example(50000)
+http_laxml_example_gather(50000)
+http_laxml_example(50001)
 http_handler(48000, 'http://localhost:50000/')
 
 // freeswitch outbound handler
