@@ -13,41 +13,35 @@ interface HookEvent {
 type DialplanPlaner = Array<DialplanActioner>
 type ChannelVariables = Array<{key: string, value: string}> | null
 
+class IDGenerator {
+    private _id = 0
+
+    next(): string {
+        return (this._id += 1) + ''
+    }
+}
+
 // reverse connection
 class Connection {
     private event_hooks: Array<HookEvent> = []
     private dialplans: Array<DialplanPlaner> = []
     private action_replies: Map<string, any> = new Map()
-    
+
+    private id_generator: IDGenerator
     private id: string
-    private _action_id: number = 0
     
-    constructor(id: string) {
+    constructor(id: string, id_generator: IDGenerator) {
         this.id = id
+        this.id_generator = id_generator
     }
-    
+
     async handle(req: ServerRequest) {
-        const url = this.get_URL(req)
-        console.log(url.pathname)
-        switch(url.pathname) {
-            case '/reply':
-                this.process_actions(req)
-                break
-            case '/event':
-                const body_event = await Deno.readAll(req.body)
-                const event = JSON.parse(text_decoder.decode(body_event))
-
-                if (event['event-name'] == 'CHANNEL_EXECUTE') {
-                    console.log('channel-execute: ' + event['application'])
-                }
-                if (event['event-name'] == 'CHANNEL_EXECUTE_COMPLETE') {
-                    console.log('channel-execute-complete: ' + event['application'])
-                }
-                this.hook_event(event)
-                break
-        }
+        this.process_actions(req)
     }
 
+    async handle_event(event: FreeswitchEvent) {
+        this.hook_event(event)
+    }
     
     async action_wait_execute(cmd: string, arg: string, variables: ChannelVariables = null) {
         const action_id = this.next_action_id() + ''
@@ -75,6 +69,7 @@ class Connection {
                 dialplan.push({set: variable.key, value: variable.value})
             }
         }
+        dialplan.push({set: 'diluvio_request_id', value: this.id})
         
         // last we push action to run
         dialplan.push(action)
@@ -98,6 +93,7 @@ class Connection {
                 dialplan.push({set: variable.key, value: variable.value})
             }
         }
+        dialplan.push({set: 'diluvio_request_id', value: this.id})
         
         // last we push action to run
         dialplan.push(action)
@@ -121,6 +117,7 @@ class Connection {
                 dialplan.push({set: variable.key, value: variable.value})
             }
         }
+        dialplan.push({set: 'diluvio_request_id', value: this.id})
         
         // last we push action to run
         dialplan.push(action)
@@ -137,7 +134,7 @@ class Connection {
     }
 
     private next_action_id(): number {
-        return this._action_id += 1
+        return parseInt(this.id_generator.next())
     }
 
     private get_URL(req: ServerRequest): URL {
@@ -184,13 +181,102 @@ class Connection {
     }
 }
 
+// handle multiple connections
+class ConnectionManager {
+    private connections: Map<string, Connection> = new Map()
+    private _conn_idx = 0
+    private callback_new_connection: ((conn: Connection) => void) | null = null
+    private id_generator: IDGenerator
+
+    constructor(id_generator: IDGenerator) {
+        this.id_generator = id_generator
+    }
+    
+    on_new_connection(cb: (conn: Connection) => void) {
+        this.callback_new_connection = cb
+    }
+    
+    handle(req: ServerRequest) {
+        switch(true) {
+            case req.url == '/':
+                this.new_connection(req)
+                break
+            case req.url == '/event':
+                this.handle_event(req)
+                break
+            case req.url.startsWith('/'):
+                this.handle_conn(req)
+                break
+            default:
+                console.error(`not know how to handle ${req.url}`)
+                break
+        }
+    }
+
+    private new_connection(req: ServerRequest) {
+        const id = this.next_id()
+        const conn = new Connection(id, this.id_generator)
+        this.connections.set(id, conn)
+
+        //run dialplan
+
+        (async () => {
+            if (this.callback_new_connection) {
+                await this.callback_new_connection(conn);
+                console.log('remove connection from pool');
+                this.connections.delete(id);
+            }
+        })()
+        
+        req.url = '/reply?diluvio_request_id='+id
+        this.handle_conn(req)
+    }
+
+    private async handle_event(req: ServerRequest) {
+        const body = await Deno.readAll(req.body)
+        const event: any = JSON.parse(text_decoder.decode(body))
+
+        const diluvio_request_id = event['variable_diluvio_request_id'] ?? null
+        if (!diluvio_request_id) {
+            console.log('omit event without request_id')
+            return
+        }
+
+        const connection = this.connections.get(diluvio_request_id) ?? null
+        if (!connection)
+            throw new Error('try handle event not found handler for ' + diluvio_request_id)
+
+        // TODO(bit4bit) when remove connection from pool?
+        
+        connection.handle_event(event)
+    }
+
+    private async handle_conn(req: ServerRequest) {
+        const url = new URL('http://localhost' + req.url)
+        const diluvio_request_id = url.searchParams.get('diluvio_request_id') ?? null
+        
+        if (!diluvio_request_id)
+            throw new Error('try handle connection with request_id')
+
+        const connection = this.connections.get(diluvio_request_id) ?? null
+        if (!connection)
+            throw new Error('try handle connection not found handler')
+
+        connection.handle(req)
+    }
+    
+    private next_id() {
+        return this.id_generator.next()
+    }
+}
 
 // run a lineal plan
 async function plan(connection: Connection) {
     console.log('running plan')
     //console.log(await connection.action_wait_execute('answer', ''))
     console.log('#step 1')
-    await connection.action_wait_execute('sleep', '1000', [{key: 'diluvio_request_id', value: '232'}])
+    await connection.action_wait_execute('sleep', '1000')
+    await connection.action_wait_execute('speak', 'flite|kal|ok this its great, it is working now')
     await connection.action_wait_execute('playback', 'tone_stream://L=3;%(100,100,350,440)')
     console.log('#step 2')
     await connection.action_wait_execute('playback', 'tone_stream://L=4;%(100,100,350,440)')
@@ -200,17 +286,16 @@ async function plan(connection: Connection) {
 }
 
 async function httpi(port: number) {
-    const conn = new Connection('123')
+    const id_generator = new IDGenerator()
+    const manager = new ConnectionManager(id_generator)
     const server = serve({port: port})
 
-    
+    manager.on_new_connection((conn: Connection) => {
+        plan(conn)
+    })
     for await (const req of server) {
-        console.log('main: ' + req.url)
-        if (req.url == '/') {
-            plan(conn)
-            req.url = '/reply'
-        }
-        conn.handle(req)
+        console.log('main: ' + req.url);
+        manager.handle(req)
     }
 }
 
