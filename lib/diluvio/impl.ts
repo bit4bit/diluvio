@@ -27,6 +27,7 @@ export interface PduCommand{
     app: string
     arg?: string
     lock: boolean
+    event_uuid: string | null
 }
 
 interface Pdu {
@@ -43,6 +44,9 @@ execute-app-name: ${opts.app}`]
             pdu.push(`execute-app-arg: ${opts.arg}`)
         }
         pdu.push(`event-lock: ${opts.lock}`)
+        if (opts.event_uuid) {
+            pdu.push(`Event-UUID: ${opts.event_uuid}`)
+        }
         pdu.push("\n")
 
         const data = text_encoder.encode(pdu.join("\n"))
@@ -211,8 +215,8 @@ abstract class FreeswitchConnectionTCP  {
         this.callbacks_once = {}
     }
 
-    async execute(cmd: string, arg: string, lock: boolean = true): Promise<FreeswitchCommandReply> {
-        const reply = await this.sendmsg('execute', cmd, arg, lock)
+    async execute(cmd: string, arg: string, lock: boolean = true, event_uuid: string | null = null): Promise<FreeswitchCommandReply> {
+        const reply = await this.sendmsg('execute', cmd, arg, lock, event_uuid)
         return reply.reply
     }
 
@@ -305,12 +309,13 @@ abstract class FreeswitchConnectionTCP  {
         await this.conn.write(text_encoder.encode(cmd + "\n\n"))
     }
 
-    protected async sendmsg(cmd: string, app: string, arg?: string, lock: boolean = true) {
+    protected async sendmsg(cmd: string, app: string, arg?: string, lock: boolean = true, event_uuid: string | null = null) {
         Message.writeTo(this.conn, {
             command: cmd,
             app: app,
             arg: arg,
-            lock: lock
+            lock: lock,
+            event_uuid: event_uuid
         })
 
         const reply: string = await this.wait_reply(FreeswitchCallbackType.CommandReply)

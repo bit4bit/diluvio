@@ -67,7 +67,7 @@ class FreeswitchOutboundServerFake {
 Deno.test('sendmsg without arg', async () => {
     const out = new StringWriter()
     
-    await Message.writeTo(out, {command: 'execute', app: 'hangup', lock: false})
+    await Message.writeTo(out, {command: 'execute', app: 'hangup', lock: false, event_uuid: null})
     assertEquals(out.toString(), `sendmsg
 call-command: execute
 execute-app-name: hangup
@@ -79,12 +79,25 @@ event-lock: false
 Deno.test('sendmsg with arg', async () => {
     const out = new StringWriter()
     
-    await Message.writeTo(out, {command: 'execute', app: 'playback', arg: '/tmp/test.ogg', lock: true})
+    await Message.writeTo(out, {command: 'execute', app: 'playback', arg: '/tmp/test.ogg', lock: true, event_uuid: null})
     assertEquals(out.toString(), `sendmsg
 call-command: execute
 execute-app-name: playback
 execute-app-arg: /tmp/test.ogg
 event-lock: true
+
+`)
+})
+
+Deno.test('sendmsg with custom event uuid', async () => {
+    const out = new StringWriter()
+    
+    await Message.writeTo(out, {command: 'execute', app: 'hangup', lock: false, event_uuid: '2323'})
+    assertEquals(out.toString(), `sendmsg
+call-command: execute
+execute-app-name: hangup
+event-lock: false
+Event-UUID: 2323
 
 `)
 })
