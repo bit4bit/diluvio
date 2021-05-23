@@ -11,6 +11,7 @@ interface HookEvent {
 }
 
 type DialplanPlaner = Array<DialplanActioner>
+type ChannelVariables = Array<{key: string, value: string}> | null
 
 // reverse connection
 class Connection {
@@ -48,7 +49,7 @@ class Connection {
     }
 
     
-    async action_wait_execute(cmd: string, arg: string, variables: Array<{key: string, value: string}> | null = null) {
+    async action_wait_execute(cmd: string, arg: string, variables: ChannelVariables = null) {
         const action_id = this.next_action_id() + ''
         const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
         const action = {action: cmd, data: arg, event_uuid: action_id, reply: reply}
@@ -67,37 +68,64 @@ class Connection {
             })
         })
 
-        this.dialplans.push(
-            [action]
-        )
+        const dialplan = []
+        // first append channel variables
+        if (variables) {
+            for(const variable of variables) {
+                dialplan.push({set: variable.key, value: variable.value})
+            }
+        }
+        
+        // last we push action to run
+        dialplan.push(action)
+        
+        this.dialplans.push(dialplan)
 
         const reply_val = await replie
         console.log(`action get reply ${reply_val} for ${action_id}`)
         return await resp
     }
 
-    async action(cmd: string, arg: string) {
+    async action(cmd: string, arg: string, variables: ChannelVariables = null) {
         const action_id = this.next_action_id() + ''
         const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
         const action = {action: cmd, data: arg, reply: reply}
 
-        this.dialplans.push(
-            [action]
-        )
+        const dialplan = []
+        // first append channel variables
+        if (variables) {
+            for(const variable of variables) {
+                dialplan.push({set: variable.key, value: variable.value})
+            }
+        }
+        
+        // last we push action to run
+        dialplan.push(action)
+        
+        this.dialplans.push(dialplan)
         
         return await new Promise((resolve) => {
             this.action_replies.set(action_id, resolve)
         })
     }
 
-    async api(cmd: string, arg: string) {
+    async api(cmd: string, arg: string, variables: ChannelVariables = null) {
         const action_id = this.next_action_id() + ''
         const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
         const action = {api: cmd, arg: arg, reply: reply}
 
-        this.dialplans.push([
-            action
-        ])
+        const dialplan = []
+        // first append channel variables
+        if (variables) {
+            for(const variable of variables) {
+                dialplan.push({set: variable.key, value: variable.value})
+            }
+        }
+        
+        // last we push action to run
+        dialplan.push(action)
+
+        this.dialplans.push(dialplan)
         
         return await new Promise((resolve) => {
             this.action_replies.set(action_id, resolve)
@@ -162,7 +190,7 @@ async function plan(connection: Connection) {
     console.log('running plan')
     //console.log(await connection.action_wait_execute('answer', ''))
     console.log('#step 1')
-    await connection.action_wait_execute('sleep', '1000')
+    await connection.action_wait_execute('sleep', '1000', [{key: 'diluvio_request_id', value: '232'}])
     await connection.action_wait_execute('playback', 'tone_stream://L=3;%(100,100,350,440)')
     console.log('#step 2')
     await connection.action_wait_execute('playback', 'tone_stream://L=4;%(100,100,350,440)')
