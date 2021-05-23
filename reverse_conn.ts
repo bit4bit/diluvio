@@ -86,22 +86,7 @@ class Connection {
 
     async action(cmd: string, arg: string, variables: ChannelVariables = null) {
         const action_id = this.next_action_id() + ''
-        const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
-        const action = {action: cmd, data: arg, reply: reply}
-
-        const dialplan = []
-        // first append channel variables
-        if (variables) {
-            for(const variable of variables) {
-                dialplan.push({set: variable.key, value: variable.value})
-            }
-        }
-        dialplan.push({set: 'diluvio_request_id', value: this.id})
-        
-        // last we push action to run
-        dialplan.push(action)
-        
-        this.dialplans.push(dialplan)
+        this.new_dialplan(action_id, {action: cmd, data: arg}, variables)
         
         return await new Promise((resolve) => {
             this.action_replies.set(action_id, resolve)
@@ -110,22 +95,7 @@ class Connection {
 
     async api(cmd: string, arg: string, variables: ChannelVariables = null) {
         const action_id = this.next_action_id() + ''
-        const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
-        const action = {api: cmd, arg: arg, reply: reply}
-
-        const dialplan = []
-        // first append channel variables
-        if (variables) {
-            for(const variable of variables) {
-                dialplan.push({set: variable.key, value: variable.value})
-            }
-        }
-        dialplan.push({set: 'diluvio_request_id', value: this.id})
-        
-        // last we push action to run
-        dialplan.push(action)
-
-        this.dialplans.push(dialplan)
+        this.new_dialplan(action_id, {api: cmd, arg: arg}, variables)
         
         return await new Promise((resolve) => {
             this.action_replies.set(action_id, resolve)
@@ -181,6 +151,26 @@ class Connection {
     private send_reply(req: ServerRequest, data: any) {
         console.log(`\t send reply : ${JSON.stringify(data)}`)
         req.respond({body: JSON.stringify(data)})
+    }
+
+    private new_dialplan(action_id: string, action: any, variables: ChannelVariables = null) {
+        const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
+        action.reply = reply
+
+        const dialplan = []
+        // first append channel variables
+        if (variables) {
+            for(const variable of variables) {
+                dialplan.push({set: variable.key, value: variable.value})
+            }
+        }
+        dialplan.push({set: 'diluvio_request_id', value: this.id})
+        
+        // last we push action to run
+        dialplan.push(action)
+
+        this.dialplans.push(dialplan)
+
     }
 }
 
