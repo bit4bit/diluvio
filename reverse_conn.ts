@@ -21,6 +21,9 @@ class IDGenerator {
     }
 }
 
+type ConnectionRemover = () => void
+type CallbackNewConnection = (conn: Connection, remover: ConnectionRemover) => void
+
 // reverse connection
 class Connection {
     private event_hooks: Array<HookEvent> = []
@@ -185,14 +188,14 @@ class Connection {
 class ConnectionManager {
     private connections: Map<string, Connection> = new Map()
     private _conn_idx = 0
-    private callback_new_connection: ((conn: Connection) => void) | null = null
+    private callback_new_connection: CallbackNewConnection | null = null
     private id_generator: IDGenerator
 
     constructor(id_generator: IDGenerator) {
         this.id_generator = id_generator
     }
     
-    on_new_connection(cb: (conn: Connection) => void) {
+    on_new_connection(cb: CallbackNewConnection) {
         this.callback_new_connection = cb
     }
     
@@ -220,13 +223,12 @@ class ConnectionManager {
 
         //run dialplan
 
-        (async () => {
-            if (this.callback_new_connection) {
-                await this.callback_new_connection(conn);
-                console.log('remove connection from pool');
-                this.connections.delete(id);
-            }
-        })()
+        if (this.callback_new_connection) {
+            this.callback_new_connection(conn, () => {
+                console.log('remove connection from pool')
+                this.connections.delete(id)
+            })
+        }
         
         req.url = '/reply?diluvio_request_id='+id
         this.handle_conn(req)
@@ -282,7 +284,10 @@ async function plan(connection: Connection) {
     await connection.action_wait_execute('playback', 'tone_stream://L=4;%(100,100,350,440)')
     console.log('#step 3')
     await connection.action_wait_execute('playback', 'tone_stream://L=5;%(100,100,350,440)')
+
+    // TODO(bit4bit) not return
     await connection.action('hangup', 'OUT')
+    console.log('###DONE PLAN')
 }
 
 async function httpi(port: number) {
@@ -290,8 +295,9 @@ async function httpi(port: number) {
     const manager = new ConnectionManager(id_generator)
     const server = serve({port: port})
 
-    manager.on_new_connection((conn: Connection) => {
-        plan(conn)
+    manager.on_new_connection(async (conn: Connection, remove: ConnectionRemover) => {
+        await plan(conn)
+        remove()
     })
     for await (const req of server) {
         console.log('main: ' + req.url);
