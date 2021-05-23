@@ -10,10 +10,12 @@ interface HookEvent {
     callback: (event: FreeswitchEvent) => void
 }
 
+type DialplanPlaner = Array<DialplanActioner>
+
 // reverse connection
 class Connection {
     private event_hooks: Array<HookEvent> = []
-    private actions: Array<DialplanActioner> = []
+    private dialplans: Array<DialplanPlaner> = []
     private action_replies: Map<string, any> = new Map()
     
     private id: string
@@ -46,7 +48,7 @@ class Connection {
     }
 
     
-    async action_wait_execute(cmd: string, arg: string) {
+    async action_wait_execute(cmd: string, arg: string, variables: Array<{key: string, value: string}> | null = null) {
         const action_id = this.next_action_id() + ''
         const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
         const action = {action: cmd, data: arg, event_uuid: action_id, reply: reply}
@@ -65,7 +67,9 @@ class Connection {
             })
         })
 
-        this.actions.push(action)
+        this.dialplans.push(
+            [action]
+        )
 
         const reply_val = await replie
         console.log(`action get reply ${reply_val} for ${action_id}`)
@@ -77,7 +81,9 @@ class Connection {
         const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
         const action = {action: cmd, data: arg, reply: reply}
 
-        this.actions.push(action)
+        this.dialplans.push(
+            [action]
+        )
         
         return await new Promise((resolve) => {
             this.action_replies.set(action_id, resolve)
@@ -89,7 +95,9 @@ class Connection {
         const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
         const action = {api: cmd, arg: arg, reply: reply}
 
-        this.actions.push(action)
+        this.dialplans.push([
+            action
+        ])
         
         return await new Promise((resolve) => {
             this.action_replies.set(action_id, resolve)
@@ -122,7 +130,7 @@ class Connection {
             this.action_replies.delete(action_id)
         }
         
-        if (this.actions.length == 0) {
+        if (this.dialplans.length == 0) {
             console.log('no actions waiting')
             setTimeout(async () => {
                 await this.process_actions(req)
@@ -130,8 +138,8 @@ class Connection {
             return
         }
 
-        this.send_reply(req, this.actions)
-        this.actions = []
+        const dialplan = this.dialplans.shift()
+        this.send_reply(req, dialplan)
     }
 
     private hook_event(event: FreeswitchEvent) {
