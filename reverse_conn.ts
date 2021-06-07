@@ -47,15 +47,13 @@ class Connection {
     }
     
     async action_wait_execute(cmd: string, arg: string, variables: ChannelVariables = null) {
-        const action_id = this.next_action_id() + ''
-        const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
-        const action = {action: cmd, data: arg, event_uuid: action_id, reply: reply}
+        const action_id = this.next_action_id()
+        const action = {action: cmd, data: arg, event_uuid: action_id, reply: this.reply_path(action_id)}
 
         const replie =  new Promise((resolve) => {
             this.action_replies.set(action_id, resolve)
         })
 
-        
         const resp = new Promise((resolve) => {
             this.on_event({
                 filter: (event) => {
@@ -85,7 +83,7 @@ class Connection {
     }
 
     async action(cmd: string, arg: string, variables: ChannelVariables = null) {
-        const action_id = this.next_action_id() + ''
+        const action_id = this.next_action_id()
         this.new_dialplan(action_id, {action: cmd, data: arg}, variables)
         
         return await new Promise((resolve) => {
@@ -94,7 +92,7 @@ class Connection {
     }
 
     async api(cmd: string, arg: string, variables: ChannelVariables = null) {
-        const action_id = this.next_action_id() + ''
+        const action_id = this.next_action_id()
         this.new_dialplan(action_id, {api: cmd, arg: arg}, variables)
         
         return await new Promise((resolve) => {
@@ -106,8 +104,8 @@ class Connection {
         this.event_hooks.push(hook)
     }
 
-    private next_action_id(): number {
-        return parseInt(this.id_generator.next())
+    private next_action_id(): string {
+        return parseInt(this.id_generator.next()) + ''
     }
 
     private get_URL(req: ServerRequest): URL {
@@ -154,8 +152,7 @@ class Connection {
     }
 
     private new_dialplan(action_id: string, action: any, variables: ChannelVariables = null) {
-        const reply = `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
-        action.reply = reply
+        action.reply = this.reply_path(action_id)
 
         const dialplan = []
         // first append channel variables
@@ -170,7 +167,10 @@ class Connection {
         dialplan.push(action)
 
         this.dialplans.push(dialplan)
+    }
 
+    private reply_path(action_id: string) {
+        return `/reply?diluvio_action_id=${action_id}&diluvio_request_id=${this.id}`
     }
 }
 
