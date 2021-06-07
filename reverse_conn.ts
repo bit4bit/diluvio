@@ -189,7 +189,7 @@ class ConnectionManager {
         this.callback_new_connection = cb
     }
     
-    handle(req: ServerRequest) {
+    async handle(req: ServerRequest) {
         switch(true) {
             case req.url == '/':
                 this.new_connection(req)
@@ -206,7 +206,7 @@ class ConnectionManager {
         }
     }
 
-    private new_connection(req: ServerRequest) {
+    private async new_connection(req: ServerRequest) {
         const id = this.next_id()
         const conn = new Connection(id, this.id_generator)
         this.connections.set(id, conn)
@@ -306,11 +306,13 @@ const listener = Deno.listen({port: 44002})
 console.log('listening tcp')
 
 for await (const conn of listener) {
-    const diluvio = new Diluvio(dialplan, publish)
-    const fsconn = new FreeswitchOutboundTCP(conn)        
-    const diluvio_conn = diluvio.connect(fsconn)
-    
-    fsconn.process()
-    await diluvio_conn.process()
-    console.log('done connection to freeswitch')
+    (async () => {
+        const diluvio = new Diluvio(dialplan, publish)
+        const fsconn = new FreeswitchOutboundTCP(conn)        
+        const diluvio_conn = diluvio.connect(fsconn)
+        
+        fsconn.process()
+        await diluvio_conn.process()
+        console.log('done connection to freeswitch')
+    })()
 }
