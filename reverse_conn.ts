@@ -82,14 +82,16 @@ class Connection {
 
     async action(cmd: string, arg: string, variables: ChannelVariables = null) {
         const action_id = this.next_action_id()
-        this.new_dialplan(action_id, {action: cmd, data: arg}, variables)
+        
+        this.enqueue_dialplan(action_id, {action: cmd, data: arg}, variables)
         
         return await this.wait_reply(action_id)
     }
 
     async api(cmd: string, arg: string, variables: ChannelVariables = null) {
         const action_id = this.next_action_id()
-        this.new_dialplan(action_id, {api: cmd, arg: arg}, variables)
+        
+        this.enqueue_dialplan(action_id, {api: cmd, arg: arg}, variables)
         
         return await this.wait_reply(action_id)
     }
@@ -151,7 +153,7 @@ class Connection {
         req.respond({body: JSON.stringify(data)})
     }
 
-    private new_dialplan(action_id: string, action: any, variables: ChannelVariables = null) {
+    private enqueue_dialplan(action_id: string, action: any, variables: ChannelVariables = null) {
         action.reply = this.reply_path(action_id)
 
         const dialplan = []
