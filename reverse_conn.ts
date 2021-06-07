@@ -46,7 +46,7 @@ class Connection {
         this.hook_event(event)
     }
     
-    async action_wait_execute(cmd: string, arg: string, variables: ChannelVariables = null) {
+    async action_wait_execute(cmd: string, arg: string, variables: ChannelVariables = null): Promise<any> {
         const action_id = this.next_action_id()
         const action = {action: cmd, data: arg, event_uuid: action_id, reply: this.reply_path(action_id)}
 
@@ -266,16 +266,43 @@ class ConnectionManager {
 
 // run a lineal plan
 async function plan(connection: Connection) {
+    const speak = async (phrase: string) => {
+        await connection.action_wait_execute('speak', `flite|kal|${phrase}`)
+    }
+    const playback = async (stream: string) => {
+        await connection.action_wait_execute('playback', stream)
+    }
+    const read = async (variable: string, opts = {min: 3, max: 7, sound: 'silence_stream://1000', terminators: '#', timeout: 10000}) => {
+        return await connection.action_wait_execute('read', `${opts.min} ${opts.max} ${opts.sound} ${variable} ${opts.timeout} ${opts.terminators}`)
+    }
+    
     console.log('running plan')
     //console.log(await connection.action_wait_execute('answer', ''))
     console.log('#step 1')
     await connection.action_wait_execute('sleep', '1000')
-    await connection.action_wait_execute('speak', 'flite|kal|ok this its great, it is working now')
-    await connection.action_wait_execute('playback', 'tone_stream://L=3;%(100,100,350,440)')
+    await speak('ok this its great, it is working now')
+    await playback('tone_stream://L=3;%(100,100,350,440)')
     console.log('#step 2')
-    await connection.action_wait_execute('playback', 'tone_stream://L=4;%(100,100,350,440)')
+    await playback('tone_stream://L=4;%(100,100,350,440)')
     console.log('#step 3')
-    await connection.action_wait_execute('playback', 'tone_stream://L=5;%(100,100,350,440)')
+    await playback('tone_stream://L=5;%(100,100,350,440)')
+
+    console.log('#step 4')
+    // example reading and waiting digits
+    await speak('please insert digits')
+    const result1 = await read('res')
+    const digits1 = result1['variable_res']
+    await speak(`your digits are ${digits1}`)
+
+    // we can implement a IVR with this
+    await speak('try guess the number, end with #')
+    const result2 = await read('res')
+    const digits2 = result2['variable_res']
+    if (digits2 == '2323') {
+        await speak('Yeaaa you win')
+    } else {
+        await speak('Naaa Loser')
+    }
 
     // TODO(bit4bit) not return
     await connection.action('hangup', 'OUT')
