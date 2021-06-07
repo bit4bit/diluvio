@@ -50,9 +50,7 @@ class Connection {
         const action_id = this.next_action_id()
         const action = {action: cmd, data: arg, event_uuid: action_id, reply: this.reply_path(action_id)}
 
-        const replie =  new Promise((resolve) => {
-            this.action_replies.set(action_id, resolve)
-        })
+        const replie =  this.wait_reply(action_id)
 
         const resp = new Promise((resolve) => {
             this.on_event({
@@ -86,18 +84,14 @@ class Connection {
         const action_id = this.next_action_id()
         this.new_dialplan(action_id, {action: cmd, data: arg}, variables)
         
-        return await new Promise((resolve) => {
-            this.action_replies.set(action_id, resolve)
-        })
+        return await this.wait_reply(action_id)
     }
 
     async api(cmd: string, arg: string, variables: ChannelVariables = null) {
         const action_id = this.next_action_id()
         this.new_dialplan(action_id, {api: cmd, arg: arg}, variables)
         
-        return await new Promise((resolve) => {
-            this.action_replies.set(action_id, resolve)
-        })
+        return await this.wait_reply(action_id)
     }
 
     on_event(hook: HookEvent) {
@@ -111,6 +105,12 @@ class Connection {
     private get_URL(req: ServerRequest): URL {
         const path = `http://localhost${req.url}`
         return new URL(path)
+    }
+
+    private async wait_reply(action_id: string) {
+        return new Promise((resolve) => {
+            this.action_replies.set(action_id, resolve)
+        })
     }
     
     private async process_actions(req: ServerRequest) {
